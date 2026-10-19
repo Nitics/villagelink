@@ -29,7 +29,9 @@ interface AppValue {
   data: Data;
   loaded: boolean;
   offlineAt: number | null; // set when showing the saved copy
-  refresh: () => Promise<void>;
+  loadedAt: number; // when data last came from the database
+  /** Reloads from the database; resolves with the fresh data (or null if it couldn’t load). */
+  refresh: () => Promise<Data | null>;
 
   user: User | null;
   profile: Profile | null;
@@ -67,6 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<Data>(emptyData);
   const [loaded, setLoaded] = useState(false);
   const [offlineAt, setOfflineAt] = useState<number | null>(null);
+  const [loadedAt, setLoadedAt] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [myBusinesses, setMyBusinesses] = useState<Set<string>>(new Set());
@@ -84,24 +87,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toastTimer.current = window.setTimeout(() => setToastMsg(''), 2800);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<Data | null> => {
     const id = userIdRef.current;
     try {
       const { data: d, failed } = await loadAll(id);
-      if (id !== userIdRef.current) return; // signed in or out while loading
+      if (id !== userIdRef.current) return null; // signed in or out while loading
       if (failed && !d.businesses.length) {
         const saved = loadOffline();
-        if (saved) { setData(saved.data); setOfflineAt(saved.at); setLoaded(true); return; }
+        if (saved) { setData(saved.data); setOfflineAt(saved.at); setLoaded(true); return saved.data; }
       }
       setData(d);
       setOfflineAt(null);
+      setLoadedAt(Date.now());
       if (!failed) saveOffline(d);
+      setLoaded(true);
+      return d;
     } catch {
       const saved = loadOffline();
       if (saved) { setData(saved.data); setOfflineAt(saved.at); }
       else toast('Can’t reach VillageLink right now. Check your connection.');
+      setLoaded(true);
+      return saved?.data ?? null;
     }
-    setLoaded(true);
   }, [toast]);
 
   // Who is signed in, and what they may manage.
@@ -153,14 +160,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isStaff = profile?.role === 'staff' || isAdmin;
   const towns = data.towns.length ? data.towns : [...TOWNS];
   const value = useMemo<AppValue>(() => ({
-    data, loaded, offlineAt, refresh,
+    data, loaded, offlineAt, loadedAt, refresh,
     user, profile, isStaff, isAdmin, towns, myBusinesses,
     canManage: (id) => isStaff || myBusinesses.has(id),
     town, setTown,
     sheet, openSheet: setSheet, closeSheet: () => setSheet(null),
     needSignIn: (reason) => { if (userId) return false; setSheet({ kind: 'auth', reason }); return true; },
     toast, toastMsg, now,
-  }), [data, loaded, offlineAt, refresh, user, profile, isStaff, isAdmin, towns, myBusinesses, town, setTown, sheet, userId, toast, toastMsg, now]);
+  }), [data, loaded, offlineAt, loadedAt, refresh, user, profile, isStaff, isAdmin, towns, myBusinesses, town, setTown, sheet, userId, toast, toastMsg, now]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
