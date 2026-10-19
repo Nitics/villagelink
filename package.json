@@ -1,0 +1,30 @@
+{
+  "name": "villagelink",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:e2e": "vite build --mode e2e --outDir dist-e2e",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "e2e": "npm run build:e2e && node tests/serve-e2e.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "playwright": "^1.56.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.20",
+    "vitest": "2.1.8"
+  }
+}
