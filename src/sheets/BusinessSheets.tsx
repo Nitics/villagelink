@@ -2,16 +2,16 @@ import { useState, type FormEvent } from 'react';
 import { useApp } from '../state/AppContext';
 import { Icon } from '../components/Icon';
 import { CopyNumber, Field, PlanBadge, SheetHeader, StatusPill } from '../components/ui';
-import { BUSINESS_CATEGORIES, CONFIRM_WINDOW_MIN, GROUPS, HOURS_STALE_DAYS, PLANS, REPORT_WINDOW_MIN, TOWNS, groupOf } from '../lib/constants';
+import { BUSINESS_CATEGORIES, CONFIRM_WINDOW_MIN, GROUPS, HOURS_STALE_DAYS, PLANS, REPORT_WINDOW_MIN, groupOf } from '../lib/constants';
 import { DAYS, ago, clock, fmtMin, hoursAgeDays, hoursHint, minsSince, parseHours, statusOf } from '../lib/hours';
 import { directionsUrl, parsePrice, phoneOk, rand, whatsappUrl } from '../lib/format';
 import { actions } from '../lib/actions';
 import { businessesFromCSV, type BusinessRow } from '../lib/csv';
-import type { Plan } from '../lib/types';
+import type { Plan, Product } from '../lib/types';
 
 /* ---------------- business details ---------------- */
 export function BusinessSheet({ id }: { id: string }) {
-  const { data, now, canManage, openSheet, needSignIn, toast, refresh } = useApp();
+  const { data, now, canManage, isAdmin, openSheet, needSignIn, toast, refresh } = useApp();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const b = data.businesses.find((x) => x.id === id);
@@ -61,7 +61,10 @@ export function BusinessSheet({ id }: { id: string }) {
         </span></div>
         {showRep && (
           <div className="vrow"><Icon name="users" /><span>A resident reported it <b>{rep.open ? 'open' : 'closed'}</b> {ago(minsSince(rep.at, now))}.<br />
-            <span className="note">Resident reports help, but only the business can confirm its status.</span></span></div>
+            <span className="note">Resident reports help, but only the business can confirm its status.</span>
+            {isAdmin && <><br /><button className="btn btn-line btn-sm" style={{ marginTop: 6 }} onClick={async () => {
+              const r = await actions.deleteReports(b.id); toast(r.ok ? 'Resident reports removed' : r.error); if (r.ok) refresh();
+            }}>Remove resident reports</button></>}</span></div>
         )}
       </div>
 
@@ -197,15 +200,15 @@ export function OrderSheet({ businessId }: { businessId: string }) {
 
 /* ---------------- add / edit a business ---------------- */
 export function EditBusinessSheet({ id }: { id: string | null }) {
-  const { data, isStaff, town, openSheet, closeSheet, toast, refresh } = useApp();
+  const { data, isStaff, town, towns, openSheet, closeSheet, toast, refresh } = useApp();
   const existing = id ? data.businesses.find((b) => b.id === id) : undefined;
   const limited = !isStaff; // shop owners change everyday details only
   const [f, setF] = useState(() => ({
-    name: existing?.name ?? '', category: existing?.category ?? 'shop', town: existing?.town || (town !== 'all' ? town : TOWNS[0]),
+    name: existing?.name ?? '', category: existing?.category ?? 'shop', town: existing?.town || (town !== 'all' ? town : towns[0] ?? ''),
     typeLabel: existing?.typeLabel ?? '', address: existing?.address ?? '', phone: existing?.phone ?? '', whatsapp: existing?.whatsapp ?? '',
     openingHours: existing?.openingHours ?? '', hoursChecked: existing?.hoursChecked || new Date().toISOString().slice(0, 10),
     plan: (existing?.plan ?? 'free') as Plan, latitude: existing?.latitude?.toString() ?? '', longitude: existing?.longitude?.toString() ?? '',
-    sellsOnline: existing?.sellsOnline ?? false, description: existing?.description ?? '',
+    sellsOnline: existing?.sellsOnline ?? false, description: existing?.description ?? '', isActive: existing?.isActive ?? true,
   }));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -226,7 +229,8 @@ export function EditBusinessSheet({ id }: { id: string | null }) {
       toast('Saved'); refresh(); return;
     }
     const num = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-    const row: BusinessRow = {
+    const row: BusinessRow & { is_active: boolean } = {
+      is_active: f.isActive,
       name: f.name.trim(), category: f.category, type_label: f.typeLabel.trim() || null, town: f.town || null,
       address: f.address.trim() || null, phone: f.phone.trim() || null, whatsapp: f.whatsapp.trim() || null,
       opening_hours: f.openingHours.trim() || null, hours_checked: f.hoursChecked || null, sells_online: f.sellsOnline,
@@ -260,7 +264,7 @@ export function EditBusinessSheet({ id }: { id: string | null }) {
             <Field label="Name" id="b_name"><input id="b_name" maxLength={80} value={f.name} onChange={set('name')} /></Field>
             <div className="filters">
               <Field label="Category" id="b_cat"><select id="b_cat" value={f.category} onChange={set('category')}>{BUSINESS_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
-              <Field label="Town" id="b_town"><select id="b_town" value={f.town} onChange={set('town')}>{TOWNS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+              <Field label="Town" id="b_town"><select id="b_town" value={f.town} onChange={set('town')}>{[...new Set([...towns, f.town].filter(Boolean))].map((t) => <option key={t}>{t}</option>)}</select></Field>
             </div>
             <Field label="Description shown under the name" id="b_type"><input id="b_type" maxLength={60} value={f.typeLabel} onChange={set('typeLabel')} placeholder="e.g. Spaza shop, 24-hour fuel station" /></Field>
           </>
@@ -283,6 +287,8 @@ export function EditBusinessSheet({ id }: { id: string | null }) {
             </div>
             <label className="switch" htmlFor="b_sells"><span><b>Takes orders in the app</b><br /><span className="small muted">Shows an Order button</span></span>
               <input type="checkbox" id="b_sells" checked={f.sellsOnline} onChange={(e) => setF((x) => ({ ...x, sellsOnline: e.target.checked }))} /></label>
+            <label className="switch" htmlFor="b_active"><span><b>Show in the app</b><br /><span className="small muted">Turn off to hide it from everyone except staff</span></span>
+              <input type="checkbox" id="b_active" checked={f.isActive} onChange={(e) => setF((x) => ({ ...x, isActive: e.target.checked }))} /></label>
           </>
         )}
         <Field label="More details (optional)" id="b_desc"><textarea id="b_desc" rows={2} maxLength={500} value={f.description} onChange={set('description')} /></Field>
@@ -293,15 +299,7 @@ export function EditBusinessSheet({ id }: { id: string | null }) {
       {id && (
         <div className="box">
           <span className="eyebrow">Products ({products.length})</span>
-          {products.map((p) => (
-            <div key={p.id} className="between">
-              <span className="small" style={{ minWidth: 0 }}><b>{p.name}</b> · {rand(p.price)}{p.unit ? ` / ${p.unit}` : ''}</span>
-              <span className="row" style={{ gap: 6 }}>
-                <button className="btn btn-ghost btn-sm" onClick={async () => { const r = await actions.setInStock(p.id, !p.inStock); if (r.ok) refresh(); else toast(r.error); }}>{p.inStock ? 'In stock' : 'Out of stock'}</button>
-                <button className="iconbtn" aria-label={`Remove ${p.name}`} onClick={async () => { const r = await actions.removeProduct(p.id); if (r.ok) refresh(); else toast(r.error); }}><Icon name="x" /></button>
-              </span>
-            </div>
-          ))}
+          {products.map((p) => <ProductRow key={p.id} p={p} />)}
           <form className="stack" onSubmit={addProduct} noValidate>
             <Field label="Product" id="pp_n"><input id="pp_n" maxLength={60} value={prod.name} onChange={(e) => setProd({ ...prod, name: e.target.value })} placeholder="Maize meal 10 kg" /></Field>
             <div className="filters">
@@ -331,14 +329,14 @@ Sample Fuel Stop,fuel,24-hour fuel station,Malelane,N4 off-ramp,013 000 0000,,24
 Sample Spaza,spaza,Spaza shop,KaMaqhekeza,Near the taxi rank,072 000 0000,072 000 0000,Mo-Su 06:00-20:30,2026-10-19,true,verified,,,Bread and airtime`;
 
 export function ImportSheet() {
-  const { data, toast, refresh } = useApp();
+  const { data, towns, toast, refresh } = useApp();
   const [text, setText] = useState('');
   const [msg, setMsg] = useState<{ err?: boolean; text: string; problems?: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const run = async () => {
     if (!text.trim()) return setMsg({ err: true, text: 'Choose a CSV file or paste your list first.' });
-    const { rows, problems } = businessesFromCSV(text);
+    const { rows, problems } = businessesFromCSV(text, towns);
     if (!rows.length) return setMsg({ err: true, text: problems[0] ?? 'No businesses found.', problems: problems.slice(1) });
     setBusy(true);
     const r = await actions.importBusinesses(rows, data.businesses);
@@ -367,5 +365,41 @@ export function ImportSheet() {
       )}
       <button className="btn btn-mint" onClick={run} disabled={busy}><Icon name="upload" />{busy ? 'Importing…' : 'Import'}</button>
     </>
+  );
+}
+
+/* ---------------- one product: view, edit, stock, remove ---------------- */
+function ProductRow({ p }: { p: Product }) {
+  const { toast, refresh } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState({ name: p.name, price: String(p.price), unit: p.unit });
+  const save = async () => {
+    const price = parsePrice(f.price);
+    if (!f.name.trim() || !(price >= 0)) { toast('Add a product name and price'); return; }
+    const r = await actions.updateProduct(p.id, { name: f.name.trim(), price, unit: f.unit.trim() });
+    toast(r.ok ? 'Product saved' : r.error);
+    if (r.ok) { setEditing(false); refresh(); }
+  };
+  if (editing) {
+    return (
+      <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+        <Field label="Product" id={`pe_n_${p.id}`}><input id={`pe_n_${p.id}`} maxLength={60} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <div className="filters">
+          <Field label="Price (R)" id={`pe_p_${p.id}`}><input id={`pe_p_${p.id}`} inputMode="decimal" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} /></Field>
+          <Field label="Per" id={`pe_u_${p.id}`}><input id={`pe_u_${p.id}`} maxLength={20} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} /></Field>
+        </div>
+        <div className="btnrow"><button className="btn btn-mint btn-sm" onClick={save}>Save product</button><button className="btn btn-line btn-sm" onClick={() => setEditing(false)}>Cancel</button></div>
+      </div>
+    );
+  }
+  return (
+    <div className="between">
+      <span className="small" style={{ minWidth: 0 }}><b>{p.name}</b> · {rand(p.price)}{p.unit ? ` / ${p.unit}` : ''}</span>
+      <span className="row" style={{ gap: 6 }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} aria-label={`Edit ${p.name}`}>Edit</button>
+        <button className="btn btn-ghost btn-sm" onClick={async () => { const r = await actions.setInStock(p.id, !p.inStock); if (r.ok) refresh(); else toast(r.error); }}>{p.inStock ? 'In stock' : 'Out of stock'}</button>
+        <button className="iconbtn" aria-label={`Remove ${p.name}`} onClick={async () => { const r = await actions.removeProduct(p.id); if (r.ok) refresh(); else toast(r.error); }}><Icon name="x" /></button>
+      </span>
+    </div>
   );
 }

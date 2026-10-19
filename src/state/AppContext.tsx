@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { emptyData, loadAll, loadOffline, saveOffline, type Data } from '../lib/data';
+import { TOWNS } from '../lib/constants';
+import type { Role } from '../lib/types';
 
 export type SheetState =
   | { kind: 'business'; id: string }
@@ -13,12 +15,15 @@ export type SheetState =
   | { kind: 'editBusiness'; id: string | null }
   | { kind: 'import' }
   | { kind: 'town' }
-  | { kind: 'auth'; reason?: AuthReason; mode?: AuthMode };
+  | { kind: 'auth'; reason?: AuthReason; mode?: AuthMode }
+  | { kind: 'editListing'; id: string }
+  | { kind: 'editGroup'; id: string }
+  | { kind: 'person'; id: string };
 
 export type AuthReason = 'order' | 'post' | 'group' | 'join' | 'report' | 'plan' | 'ask';
 export type AuthMode = 'signin' | 'signup' | 'reset' | 'newpass';
 
-interface Profile { role: 'customer' | 'staff'; displayName: string }
+interface Profile { role: Role; displayName: string }
 
 interface AppValue {
   data: Data;
@@ -28,7 +33,9 @@ interface AppValue {
 
   user: User | null;
   profile: Profile | null;
-  isStaff: boolean;
+  isStaff: boolean; // staff or super user
+  isAdmin: boolean; // super user
+  towns: string[];
   myBusinesses: Set<string>;
   canManage: (businessId: string) => boolean;
 
@@ -106,7 +113,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase.from('profiles').select('role,display_name').eq('id', u.id).maybeSingle(),
       supabase.from('business_members').select('business_id').eq('user_id', u.id),
     ]);
-    setProfile({ role: p.data?.role === 'staff' ? 'staff' : 'customer', displayName: p.data?.display_name ?? '' });
+    const role: Role = p.data?.role === 'admin' ? 'admin' : p.data?.role === 'staff' ? 'staff' : 'customer';
+    setProfile({ role, displayName: p.data?.display_name ?? '' });
     setMyBusinesses(new Set((m.data ?? []).map((r: { business_id: string }) => r.business_id)));
   }, []);
 
@@ -141,16 +149,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem('villagelink.town', t); } catch { /* ignore */ }
   }, []);
 
-  const isStaff = profile?.role === 'staff';
+  const isAdmin = profile?.role === 'admin';
+  const isStaff = profile?.role === 'staff' || isAdmin;
+  const towns = data.towns.length ? data.towns : [...TOWNS];
   const value = useMemo<AppValue>(() => ({
     data, loaded, offlineAt, refresh,
-    user, profile, isStaff, myBusinesses,
+    user, profile, isStaff, isAdmin, towns, myBusinesses,
     canManage: (id) => isStaff || myBusinesses.has(id),
     town, setTown,
     sheet, openSheet: setSheet, closeSheet: () => setSheet(null),
     needSignIn: (reason) => { if (userId) return false; setSheet({ kind: 'auth', reason }); return true; },
     toast, toastMsg, now,
-  }), [data, loaded, offlineAt, refresh, user, profile, isStaff, myBusinesses, town, setTown, sheet, userId, toast, toastMsg, now]);
+  }), [data, loaded, offlineAt, refresh, user, profile, isStaff, isAdmin, towns, myBusinesses, town, setTown, sheet, userId, toast, toastMsg, now]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

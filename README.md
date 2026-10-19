@@ -22,17 +22,17 @@ Resident reports (“I saw it open”) are shown for 4 hours but never change a 
 | Visitor (not signed in) | Browse businesses, products, listings and study groups |
 | Customer | Order from shops and cancel unaccepted orders, post listings, create and join study groups, report what’s open, request a business plan, use the assistant (30 questions a day) |
 | Shop owner | Everything a customer can, plus confirm “open now”, update hours and contact details, manage products, handle their shop’s orders |
-| Staff | Everything: add, import, edit and delete businesses, see all orders, handle plan requests |
+| Staff | Add, import, edit, hide and delete businesses and products; edit, hide and delete any listing or study group; see all orders and change their status; handle plan requests |
+| Super user | Everything staff can do, plus: see all accounts, change roles and names, link shop owners to businesses, remove someone’s access; add, rename and remove towns; delete orders, plan requests and resident reports |
 
-These rules are enforced by the database itself (row-level security), not just the app. Make someone staff or a shop owner in the Supabase SQL editor:
+These rules are enforced by the database itself (row-level security), not just the app.
+
+**Managing people:** super users do this in the app under **Manage › People**: set a role, link a shop owner to their business, or **Remove access** (makes them a customer and unlinks their businesses; their history is kept). To delete an account completely, use the Supabase dashboard: Authentication › Users.
+
+The first super user has to be set in the Supabase SQL editor:
 
 ```sql
--- staff
-update public.profiles set role = 'staff' where id = (select id from auth.users where email = 'person@example.com');
--- shop owner
-insert into public.business_members (business_id, user_id)
-select b.id, u.id from public.businesses b, auth.users u
-where b.name = 'OneStop Tuck Shop' and u.email = 'owner@example.com';
+update public.profiles set role = 'admin' where id = (select id from auth.users where email = 'person@example.com');
 ```
 
 ## Project layout
@@ -47,7 +47,7 @@ where b.name = 'OneStop Tuck Shop' and u.email = 'owner@example.com';
 | `supabase/migrations/` | The database: tables, security rules and functions |
 | `supabase/functions/assistant/` | The assistant server (Supabase Edge Function) |
 | `public/sw.js` | Offline support and install-to-home-screen |
-| `tests/` | End-to-end browser test with an in-memory copy of Supabase |
+| `tests/` | End-to-end browser test with an in-memory copy of Supabase (`npm run e2e`) |
 
 ## Run it on your computer
 

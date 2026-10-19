@@ -2,7 +2,7 @@
 import { supabase } from './supabase';
 import { friendlyError } from './data';
 import type { BusinessRow } from './csv';
-import type { ListingKind, OrderStatus, Plan } from './types';
+import type { Account, ListingKind, OrderStatus, Plan, Role } from './types';
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -62,7 +62,7 @@ export const actions = {
   markRequestDone: (id: string) => run(supabase.from('plan_requests').update({ status: 'done' }).eq('id', id)),
 
   // Staff: any field. Returns the business id.
-  saveBusiness: (id: string | null, row: BusinessRow) =>
+  saveBusiness: (id: string | null, row: BusinessRow & { is_active?: boolean }) =>
     run<string>(id
       ? supabase.from('businesses').update(row).eq('id', id).select('id').single()
       : supabase.from('businesses').insert(row).select('id').single(), (d) => d.id),
@@ -93,6 +93,49 @@ export const actions = {
       added += Math.min(200, fresh.length - i);
     }
     return { ok: true, value: { added, updated } };
+  },
+
+  setBusinessActive: (id: string, active: boolean) => run(supabase.from('businesses').update({ is_active: active }).eq('id', id)),
+
+  updateProduct: (id: string, p: { name: string; price: number; unit: string }) =>
+    run(supabase.from('products').update({ name: p.name, price: p.price, unit: p.unit || null }).eq('id', id)),
+
+  /* ---- listings and study groups (owner, staff or super user) ---- */
+  updateListing: (id: string, l: { kind: ListingKind; title: string; price: number; unit: string; town: string; sellerName: string; phone: string; note: string; isActive: boolean }) =>
+    run(supabase.from('listings').update({
+      kind: l.kind, title: l.title, price: l.price, unit: l.unit || null, town: l.town || null,
+      seller_name: l.sellerName, phone: l.phone, note: l.note || null, is_active: l.isActive,
+    }).eq('id', id)),
+
+  updateGroup: (id: string, g: { subject: string; grade: string; title: string; place: string; isOnline: boolean; nextSession: string; town: string; contact: string }) =>
+    run(supabase.from('study_groups').update({
+      subject: g.subject, grade: g.grade, title: g.title, place: g.place, is_online: g.isOnline,
+      next_session: g.nextSession, town: g.town || null, contact: g.contact || null,
+    }).eq('id', id)),
+  deleteGroup: (id: string) => run(supabase.from('study_groups').delete().eq('id', id)),
+
+  /* ---- super user only ---- */
+  deleteOrder: (id: string) => run(supabase.from('orders').delete().eq('id', id)),
+  deleteRequest: (id: string) => run(supabase.from('plan_requests').delete().eq('id', id)),
+  deleteReports: (businessId: string) => run(supabase.from('status_reports').delete().eq('business_id', businessId)),
+
+  addTown: (name: string, sortOrder: number) => run(supabase.from('towns').insert({ name, sort_order: sortOrder })),
+  renameTown: (from: string, to: string) => run(supabase.from('towns').update({ name: to }).eq('name', from)),
+  deleteTown: (name: string) => run(supabase.from('towns').delete().eq('name', name)),
+
+  listAccounts: () => run<Account[]>(supabase.rpc('admin_list_users'), (rows) => (rows ?? []).map((r: any): Account => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    id: r.id, email: r.email ?? '', displayName: r.display_name ?? '', role: r.role, createdAt: r.created_at,
+    lastSignInAt: r.last_sign_in_at, businessIds: r.business_ids ?? [],
+  }))),
+  updateAccount: (userId: string, role: Role, displayName: string) =>
+    run(supabase.rpc('admin_update_user', { p_user: userId, p_role: role, p_display_name: displayName || null })),
+  linkOwner: (businessId: string, userId: string) => run(supabase.from('business_members').insert({ business_id: businessId, user_id: userId, role: 'owner' })),
+  unlinkOwner: (businessId: string, userId: string) => run(supabase.from('business_members').delete().eq('business_id', businessId).eq('user_id', userId)),
+  /** Makes the person a plain customer and unlinks them from every business. Their history stays. */
+  async removeAccess(userId: string, displayName: string): Promise<Result> {
+    const r = await run(supabase.rpc('admin_update_user', { p_user: userId, p_role: 'customer', p_display_name: displayName || null }));
+    if (!r.ok) return r;
+    return run(supabase.from('business_members').delete().eq('user_id', userId));
   },
 
   addProduct: (p: { businessId: string; name: string; price: number; unit: string }) =>

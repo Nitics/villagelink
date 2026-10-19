@@ -91,6 +91,11 @@ try {
   await page.fill('#askInput', 'Explain Pythagoras'); await page.keyboard.press('Enter'); await wait(800);
   check('Assistant answers in homework mode', await has('[school] answer to: explain pythagoras'));
 
+  await go('/profile'); await tapText('List my business or upgrade');
+  await page.fill('#pr_b', 'Thandi Bakes'); await page.fill('#pr_n', 'Thandi'); await page.fill('#pr_ph', '072 111 2222');
+  await page.click('.sheet button[type=submit]'); await wait(800);
+  check('Customer requests a business plan', await has('thandi bakes'));
+
   // ---- Shop owner ----
   await signIn('owner@test.co.za');
   await go('/profile');
@@ -119,7 +124,8 @@ try {
   // ---- Staff ----
   await signIn('staff@test.co.za');
   await go('/manage');
-  check('Staff sees everything', await has('manage villagelink') && await has('import a list') && await has('house 214'));
+  check('Staff sees all orders', await has('manage villagelink') && await has('house 214') && !(await has('people')));
+  await page.locator('.chips').getByText('Businesses', { exact: true }).click(); await wait();
   await tapText('Import a list');
   await page.fill('#csvText', 'name,category,type_label,town,opening_hours,hours_checked,sells_online\nPraxoz,fuel,24-hour fuel station,Malelane,24/7,2026-10-19,true\nTonga Butchery,butcher,Butcher,Tonga,"Mo-Sa 07:00-18:00; Su off",2026-10-19,false\nNomsa Salon,service,Hair salon,Naas,Mo-Sa 08:00-17:00,2026-10-19,false\nBad Row,cafe,,Nowhere,sometimes,,');
   await page.locator('.sheet').getByRole('button', { name: 'Import' }).click(); await wait(1200);
@@ -131,6 +137,97 @@ try {
   await page.selectOption('#b_town', 'Mangweni'); await page.click('.sheet form button[type=submit]'); await wait(800);
   check('Staff moves clinic to Mangweni', (await page.evaluate(() => window.__fake.db.businesses.find((b) => b.id === 'b3').town)) === 'Mangweni');
   await page.screenshot({ path: SHOTS + 'r4_staff.png', fullPage: true });
+
+  // ---- Super user ----
+  const tabTo = async (name) => { await page.locator('.chips').getByText(name, { exact: true }).click(); await wait(500); };
+  await signIn('admin@test.co.za');
+  await go('/profile');
+  check('Super user label on profile', await has('villagelink super user'));
+  await go('/manage');
+  check('Super user screen has People and Towns', await has('super user') && (await page.locator('.chips').innerText()).includes('People') && (await page.locator('.chips').innerText()).includes('Towns'));
+
+  // people
+  await tabTo('People');
+  check('People lists every account', (await page.locator('main button.card').count()) === 4);
+  await page.locator('main button.card', { hasText: 'cust@test.co.za' }).click(); await wait(600);
+  await page.selectOption('#pa_r', 'staff'); await page.fill('#pa_n', 'Thandi M');
+  await page.locator('.sheet').getByRole('button', { name: 'Save account' }).click(); await wait(800);
+  check('Super user promotes a customer to staff', (await page.evaluate(() => window.__fake.db.profiles.find((p) => p.id === 'u-cust').role)) === 'staff');
+  await page.selectOption('#pa_link', 'b2'); await page.locator('.sheet').getByRole('button', { name: 'Link', exact: true }).click(); await wait(800);
+  check('Super user links an owner to a business', (await page.evaluate(() => window.__fake.db.business_members.some((m) => m.user_id === 'u-cust' && m.business_id === 'b2'))) && (await page.locator('.sheet').innerText()).includes('Praxoz'));
+  await page.locator('.sheet').getByRole('button', { name: 'Remove access' }).click(); await wait(200);
+  await page.locator('.sheet').getByRole('button', { name: 'Tap again to remove access' }).click(); await wait(900);
+  check('Remove access: back to customer, unlinked', (await page.evaluate(() => window.__fake.db.profiles.find((p) => p.id === 'u-cust').role)) === 'customer'
+    && !(await page.evaluate(() => window.__fake.db.business_members.some((m) => m.user_id === 'u-cust'))));
+  await page.keyboard.press('Escape'); await wait();
+  await page.locator('main button.card', { hasText: 'admin@test.co.za' }).click(); await wait(600);
+  check('Super user can’t change own role', await page.isDisabled('#pa_r') && !(await page.locator('.sheet').innerText()).includes('Remove access'));
+  await page.keyboard.press('Escape'); await wait();
+
+  // towns
+  await tabTo('Towns');
+  await page.fill('#town_new', 'Magudu'); await page.locator('main').getByRole('button', { name: 'Add' }).click(); await wait(700);
+  check('Super user adds a town', await has('magudu'));
+  await page.locator('.card', { hasText: 'Magudu' }).getByRole('button', { name: 'Rename' }).click(); await wait();
+  await page.fill('#town_Magudu', 'Magudu Village'); await page.getByRole('button', { name: 'Save name' }).click(); await wait(700);
+  check('Super user renames a town', await has('magudu village'));
+  await page.getByRole('button', { name: 'Remove Magudu Village' }).click(); await wait(700);
+  check('Super user removes an unused town', (await page.locator('main .card', { hasText: 'Magudu Village' }).count()) === 0 && (await page.evaluate(() => !window.__fake.db.towns.some((t) => t.name.startsWith('Magudu')))));
+  await page.getByRole('button', { name: 'Remove Malelane' }).click(); await wait(400);
+  check('Town with businesses can’t be removed', await has('to another town first'));
+
+  // orders
+  await tabTo('Orders');
+  const before = await page.evaluate(() => window.__fake.db.orders.length);
+  await page.locator('.card', { hasText: 'House 214' }).getByRole('button', { name: 'Delete order' }).click(); await wait(200);
+  await page.locator('.card', { hasText: 'House 214' }).getByRole('button', { name: 'Tap again to delete for good' }).click(); await wait(800);
+  check('Super user deletes an order', (await page.evaluate(() => window.__fake.db.orders.length)) === before - 1);
+
+  // listings
+  await tabTo('Listings');
+  await page.locator('main button.card', { hasText: 'Fresh mangoes' }).click(); await wait();
+  await page.fill('#el_p', '35'); await page.uncheck('#el_a');
+  await page.locator('.sheet').getByRole('button', { name: 'Save listing' }).click(); await wait(800);
+  check('Super user edits and hides a listing', (await has('hidden')) && (await page.evaluate(() => { const l = window.__fake.db.listings.find((x) => x.title === 'Fresh mangoes'); return l.price === 35 && l.is_active === false; })));
+  await go('/market?tab=listings');
+  check('Hidden listing is gone from the market', !(await has('fresh mangoes')));
+
+  // study groups
+  await go('/manage?tab=groups');
+  await page.locator('main button.card', { hasText: 'Algebra' }).click(); await wait();
+  await page.fill('#eg_t', 'Algebra revision'); await page.locator('.sheet').getByRole('button', { name: 'Save study group' }).click(); await wait(800);
+  check('Super user edits a study group', await has('algebra revision'));
+  await page.locator('main button.card', { hasText: 'Algebra revision' }).click(); await wait();
+  await page.locator('.sheet').getByRole('button', { name: 'Delete study group' }).click(); await wait(200);
+  await page.locator('.sheet').getByRole('button', { name: 'Tap again to delete for good' }).click(); await wait(800);
+  check('Super user deletes a study group', !(await has('algebra revision')));
+
+  // plan requests
+  await tabTo('Plan requests');
+  await page.locator('.card', { hasText: 'Thandi Bakes' }).getByRole('button', { name: 'Delete request' }).click(); await wait(200);
+  await page.locator('.card', { hasText: 'Thandi Bakes' }).getByRole('button', { name: 'Tap again to delete for good' }).click(); await wait(800);
+  check('Super user deletes a plan request', !(await has('thandi bakes')));
+
+  // businesses and products
+  await tabTo('Businesses');
+  await page.locator('main button.card', { hasText: 'OneStop Tuck Shop' }).click(); await wait();
+  await page.getByRole('button', { name: 'Edit White bread' }).click(); await wait();
+  await page.fill('#pe_p_p1', '20'); await page.getByRole('button', { name: 'Save product' }).click(); await wait(800);
+  check('Super user edits a product price', (await page.evaluate(() => window.__fake.db.products.find((p) => p.id === 'p1').price)) === 20);
+  await page.keyboard.press('Escape'); await wait();
+  await page.locator('main button.card', { hasText: 'Praxoz' }).click(); await wait();
+  await page.uncheck('#b_active'); await page.click('.sheet form button[type=submit]'); await wait(800);
+  await page.keyboard.press('Escape'); await wait();
+  check('Hidden business is marked in Manage', (await page.locator('main button.card', { hasText: 'Praxoz' }).innerText()).toLowerCase().includes('hidden'));
+  await go('/services');
+  check('Hidden business is gone from Services', !(await has('praxoz')));
+
+  // resident reports
+  await tapText('Mangweni Clinic');
+  await page.getByRole('button', { name: 'Remove resident reports' }).click(); await wait(800);
+  check('Super user removes resident reports', !(await page.locator('.sheet').innerText()).toLowerCase().includes('a resident reported it'));
+  await page.keyboard.press('Escape'); await wait();
+  await page.screenshot({ path: SHOTS + 'r6_superuser.png', fullPage: true });
 
   // ---- No signal ----
   const p2 = await ctx.newPage();

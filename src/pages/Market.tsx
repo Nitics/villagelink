@@ -42,7 +42,7 @@ export default function Market() {
       </Empty>
     );
   } else if (tab === 'listings') {
-    const list = data.listings.filter(inTown(town)).filter((l) => kind === 'all' || l.kind === kind);
+    const list = data.listings.filter((l) => l.isActive).filter(inTown(town)).filter((l) => kind === 'all' || l.kind === kind);
     body = (
       <>
         <div className="chips" role="group" aria-label="Listing type">

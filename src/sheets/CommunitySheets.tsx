@@ -3,15 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../state/AppContext';
 import { Icon } from '../components/Icon';
 import { CopyNumber, Field, SheetHeader } from '../components/ui';
-import { LISTING_KINDS, PLANS, SUBJECTS, TOWNS } from '../lib/constants';
+import { LISTING_KINDS, PLANS, SUBJECTS } from '../lib/constants';
 import { parsePrice, phoneOk, rand, whatsappUrl } from '../lib/format';
 import { actions } from '../lib/actions';
 import type { ListingKind, Plan } from '../lib/types';
 
-const defaultTown = (t: string) => (t !== 'all' ? t : TOWNS[0]);
+export const defaultTown = (t: string, towns: string[]) => (t !== 'all' ? t : towns[0] ?? '');
 
 export function ListingSheet({ id }: { id: string }) {
-  const { data, user, isStaff, closeSheet, toast, refresh } = useApp();
+  const { data, user, isStaff, openSheet, closeSheet, toast, refresh } = useApp();
   const l = data.listings.find((x) => x.id === id);
   if (!l) return <><SheetHeader title="Not found" /><p>This listing was removed.</p></>;
   const wa = whatsappUrl(l.phone);
@@ -28,6 +28,9 @@ export function ListingSheet({ id }: { id: string }) {
       {wa && <a className="btn btn-mint" href={wa} target="_blank" rel="noopener noreferrer"><Icon name="msg" />Message on WhatsApp</a>}
       <p className="note">Meet in a public place and check the item before you pay.</p>
       {(user?.id === l.ownerId || isStaff) && (
+        <button className="btn btn-line" onClick={() => openSheet({ kind: 'editListing', id: l.id })}>Edit listing</button>
+      )}
+      {(user?.id === l.ownerId || isStaff) && (
         <button className="btn btn-danger" onClick={async () => {
           const r = await actions.removeListing(l.id);
           if (!r.ok) { toast(r.error); return; }
@@ -39,9 +42,9 @@ export function ListingSheet({ id }: { id: string }) {
 }
 
 export function NewListingSheet() {
-  const { town, profile, closeSheet, toast, refresh } = useApp();
+  const { town, towns, profile, closeSheet, toast, refresh } = useApp();
   const navigate = useNavigate();
-  const [f, setF] = useState({ kind: 'goods' as ListingKind, title: '', price: '', unit: '', town: defaultTown(town), sellerName: profile?.displayName ?? '', phone: '', note: '' });
+  const [f, setF] = useState({ kind: 'goods' as ListingKind, title: '', price: '', unit: '', town: defaultTown(town, towns), sellerName: profile?.displayName ?? '', phone: '', note: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -68,7 +71,7 @@ export function NewListingSheet() {
           <Field label="Per (optional)" id="lu"><input id="lu" maxLength={20} value={f.unit} onChange={set('unit')} placeholder="kg, hour, item" /></Field>
         </div>
         <div className="filters">
-          <Field label="Town" id="ltown"><select id="ltown" value={f.town} onChange={set('town')}>{TOWNS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+          <Field label="Town" id="ltown"><select id="ltown" value={f.town} onChange={set('town')}>{towns.map((t) => <option key={t}>{t}</option>)}</select></Field>
           <Field label="Your name" id="ls"><input id="ls" maxLength={60} value={f.sellerName} onChange={set('sellerName')} /></Field>
         </div>
         <Field label="Phone or WhatsApp" id="lph"><input id="lph" inputMode="tel" maxLength={20} value={f.phone} onChange={set('phone')} placeholder="082 123 4567" /></Field>
@@ -82,8 +85,8 @@ export function NewListingSheet() {
 }
 
 export function NewGroupSheet() {
-  const { town, closeSheet, toast, refresh } = useApp();
-  const [f, setF] = useState({ subject: SUBJECTS[0], grade: 'Grade 12', title: '', mode: 'local', town: defaultTown(town), place: '', nextSession: '', contact: '' });
+  const { town, towns, closeSheet, toast, refresh } = useApp();
+  const [f, setF] = useState({ subject: SUBJECTS[0], grade: 'Grade 12', title: '', mode: 'local', town: defaultTown(town, towns), place: '', nextSession: '', contact: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -109,7 +112,7 @@ export function NewGroupSheet() {
         <Field label="Topic" id="gt"><input id="gt" maxLength={80} value={f.title} onChange={set('title')} placeholder="e.g. Trigonometry past papers" /></Field>
         <div className="filters">
           <Field label="Meet" id="gm"><select id="gm" value={f.mode} onChange={set('mode')}><option value="local">In person</option><option value="online">Online</option></select></Field>
-          <Field label="Town" id="gtown"><select id="gtown" value={f.town} onChange={set('town')}>{TOWNS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+          <Field label="Town" id="gtown"><select id="gtown" value={f.town} onChange={set('town')}>{towns.map((t) => <option key={t}>{t}</option>)}</select></Field>
         </div>
         <Field label="Where" id="gw"><input id="gw" maxLength={80} value={f.place} onChange={set('place')} placeholder="e.g. Community library, or WhatsApp group" /></Field>
         <Field label="First session" id="gn"><input id="gn" maxLength={40} value={f.nextSession} onChange={set('nextSession')} placeholder="e.g. Thu 15:00" /></Field>
@@ -122,8 +125,8 @@ export function NewGroupSheet() {
 }
 
 export function PlanRequestSheet() {
-  const { town, profile, closeSheet, toast, refresh } = useApp();
-  const [f, setF] = useState({ businessName: '', town: defaultTown(town), plan: 'verified' as Plan, contactName: profile?.displayName ?? '', phone: '', details: '' });
+  const { town, towns, profile, closeSheet, toast, refresh } = useApp();
+  const [f, setF] = useState({ businessName: '', town: defaultTown(town, towns), plan: 'verified' as Plan, contactName: profile?.displayName ?? '', phone: '', details: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -144,7 +147,7 @@ export function PlanRequestSheet() {
       <form className="stack" onSubmit={submit} noValidate>
         <Field label="Business name" id="pr_b"><input id="pr_b" maxLength={80} value={f.businessName} onChange={set('businessName')} /></Field>
         <div className="filters">
-          <Field label="Town" id="pr_t"><select id="pr_t" value={f.town} onChange={set('town')}>{TOWNS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+          <Field label="Town" id="pr_t"><select id="pr_t" value={f.town} onChange={set('town')}>{towns.map((t) => <option key={t}>{t}</option>)}</select></Field>
           <Field label="Plan" id="pr_p"><select id="pr_p" value={f.plan} onChange={set('plan')}>{PLANS.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.price})</option>)}</select></Field>
         </div>
         <div className="filters">

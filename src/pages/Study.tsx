@@ -7,7 +7,7 @@ import { actions } from '../lib/actions';
 import { inTown, townLabel } from './Home';
 
 export default function Study() {
-  const { data, town, user, needSignIn, openSheet, toast, refresh } = useApp();
+  const { data, town, user, isStaff, needSignIn, openSheet, toast, refresh } = useApp();
   const [subject, setSubject] = useState('all');
   const [busy, setBusy] = useState<string | null>(null);
   const all = data.groups.filter(inTown(town));
@@ -46,6 +46,7 @@ export default function Study() {
               <span className="meta row" style={{ gap: 6 }}><Icon name={g.isOnline ? 'msg' : 'pin'} />{g.place}{g.town ? ` · ${g.town}` : ''}</span>
               <span className="meta row" style={{ gap: 6 }}><Icon name="clock" />Next session: {g.nextSession}</span>
               {g.contact && <span className="meta row" style={{ gap: 6 }}><Icon name="phone" />{g.contact}</span>}
+              {(isStaff || g.ownerId === user?.id) && <button className="btn btn-line btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => openSheet({ kind: 'editGroup', id: g.id })}>Edit group</button>}
               <div className="between full">
                 <span className="meta row" style={{ gap: 6 }}><Icon name="users" />{g.members.length} learner{g.members.length === 1 ? '' : 's'}</span>
                 <button className="btn btn-ghost btn-sm" aria-pressed={joined} disabled={busy === g.id} onClick={() => toggle(g.id, joined)}>

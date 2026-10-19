@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { townLabel } from './Home';
 
 export default function Profile() {
-  const { user, profile, isStaff, myBusinesses, data, town, openSheet, needSignIn, toast } = useApp();
+  const { user, profile, isStaff, isAdmin, myBusinesses, data, town, openSheet, needSignIn, toast } = useApp();
   const myShops = data.businesses.filter((b) => myBusinesses.has(b.id));
   const myRequests = data.requests.filter((r) => r.userId === user?.id);
 
@@ -17,7 +17,7 @@ export default function Profile() {
         {user ? (
           <>
             <span className="small"><b>{profile?.displayName || user.email}</b>{profile?.displayName ? ` · ${user.email}` : ''}</span>
-            <span className="small muted">{isStaff ? 'VillageLink staff' : myShops.length ? `Owner of ${myShops.map((b) => b.name).join(', ')}` : 'Customer'}</span>
+            <span className="small muted">{isAdmin ? 'VillageLink super user' : isStaff ? 'VillageLink staff' : myShops.length ? `Owner of ${myShops.map((b) => b.name).join(', ')}` : 'Customer'}</span>
             <button className="btn btn-line btn-sm" style={{ alignSelf: 'flex-start' }} onClick={async () => { await supabase.auth.signOut(); toast('Signed out'); }}>Sign out</button>
           </>
         ) : (
