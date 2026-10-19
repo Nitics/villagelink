@@ -52,6 +52,7 @@ export interface Listing {
   note: string;
   ownerId: string;
   createdAt: number;
+  isActive: boolean;
 }
 
 export interface StudyGroup {
@@ -108,6 +109,18 @@ export interface PlanRequest {
   status: 'new' | 'done';
   at: number;
   userId: string;
+}
+
+export type Role = 'customer' | 'staff' | 'admin';
+
+export interface Account {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  createdAt: string;
+  lastSignInAt: string | null;
+  businessIds: string[];
 }
 
 export type Status = 'confirmed' | 'expected' | 'unverified' | 'closedConfirmed' | 'closed';

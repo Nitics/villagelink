@@ -7,7 +7,8 @@ export const createClient = (() => {
   const USERS={
     'cust@test.co.za':{id:'u-cust',email:'cust@test.co.za',role:'customer',name:'Thandi'},
     'owner@test.co.za':{id:'u-owner',email:'owner@test.co.za',role:'customer',name:'OneStop owner'},
-    'staff@test.co.za':{id:'u-staff',email:'staff@test.co.za',role:'staff',name:''}
+    'staff@test.co.za':{id:'u-staff',email:'staff@test.co.za',role:'staff',name:''},
+    'admin@test.co.za':{id:'u-admin',email:'admin@test.co.za',role:'admin',name:'Super'}
   };
   const db={
     businesses:[
@@ -17,10 +18,13 @@ export const createClient = (() => {
     ],
     products:[{id:'p1',business_id:'b1',name:'White bread',price:'18.00',unit:'loaf',in_stock:true,sort_order:0},{id:'p2',business_id:'b1',name:'Sugar 2.5 kg',price:'52.00',unit:'bag',in_stock:false,sort_order:1}],
     listings:[],study_groups:[],group_members:[],status_reports:[],orders:[],order_items:[],plan_requests:[],
-    profiles:[],business_members:[{business_id:'b1',user_id:'u-owner'}]
+    profiles:[],business_members:[{business_id:'b1',user_id:'u-owner'}],
+    towns:['Malelane','Komatipoort','Hectorspruit','Marloth Park','KaMaqhekeza','Kamhlushwa','Tonga','Mangweni','Naas','Schoemansdal','Jeppes Reef','Driekoppies','Mbuzini','Steenbok','Langeloop'].map((name,i)=>({name,sort_order:i+1}))
   };
   Object.values(USERS).forEach(u=>db.profiles.push({id:u.id,role:u.role,display_name:u.name}));
   let session=null;const listeners=[];
+  const roleOf=(me)=>me?((db.profiles.find(p=>p.id===me.id)||{}).role||'customer'):'anon';
+  const staffish=(me)=>['staff','admin'].includes(roleOf(me));
   window.__fake={db,calls:[]};
 
   function builder(table){
@@ -63,10 +67,17 @@ export const createClient = (() => {
         return {data:single?out[0]:out,error:null};
       }
       let list=T.filter(r=>filters.every(f=>f(r)));
-      if(op==='update'){list.forEach(r=>Object.assign(r,payload));return {data:single?list[0]:list,error:null}}
-      if(op==='delete'){db[table]=T.filter(r=>!list.includes(r));return {data:null,error:null}}
-      if(table==='orders'){list=list.filter(o=>me&&(o.customer_id===me.id||USERS[me.email].role==='staff'||db.business_members.some(m=>m.user_id===me.id&&m.business_id===o.business_id)))}
-      if(table==='plan_requests'){list=list.filter(r=>me&&(r.user_id===me.id||USERS[me.email].role==='staff'))}
+      if(op==='update'){
+        if(table==='towns'&&payload.name)list.forEach(t=>db.businesses.forEach(b=>{if(b.town===t.name)b.town=payload.name}));
+        list.forEach(r=>Object.assign(r,payload));return {data:single?list[0]:list,error:null}}
+      if(op==='delete'){
+        if(table==='towns'&&list.some(t=>db.businesses.some(b=>b.town===t.name)))return {data:null,error:{message:'violates foreign key constraint',code:'23503'}};
+        if(['orders','plan_requests','status_reports','towns'].includes(table)&&roleOf(me)!=='admin')return {data:null,error:null};
+        db[table]=T.filter(r=>!list.includes(r));return {data:null,error:null}}
+      if(table==='businesses'&&!staffish(me))list=list.filter(b=>b.is_active!==false);
+      if(table==='listings'&&!staffish(me))list=list.filter(l=>l.is_active!==false||(me&&l.owner_id===me.id));
+      if(table==='orders'){list=list.filter(o=>me&&(o.customer_id===me.id||staffish(me)||db.business_members.some(m=>m.user_id===me.id&&m.business_id===o.business_id)))}
+      if(table==='plan_requests'){list=list.filter(r=>me&&(r.user_id===me.id||staffish(me)))}
       list=list.map(r=>embed?{...r,order_items:db.order_items.filter(i=>i.order_id===r.id)}:{...r});
       for(const [c,d] of orders.reverse())list.sort((a,b)=>(a[c]>b[c]?1:a[c]<b[c]?-1:0)*d);
       if(lim)list=list.slice(0,lim);
@@ -82,7 +93,16 @@ export const createClient = (() => {
       window.__fake.calls.push('rpc:'+name);
       const me=session&&session.user;
       if(!me)return err('permission denied for function '+name,'42501');
-      const isStaff=USERS[me.email].role==='staff',member=bid=>db.business_members.some(m=>m.user_id===me.id&&m.business_id===bid);
+      const isStaff=staffish(me),member=bid=>db.business_members.some(m=>m.user_id===me.id&&m.business_id===bid);
+      if(name==='admin_list_users'){
+        if(roleOf(me)!=='admin')return err('Only super users can see all accounts','42501');
+        return {data:Object.values(USERS).map(u=>{const p=db.profiles.find(x=>x.id===u.id)||{};return {id:u.id,email:u.email,display_name:p.display_name||'',role:p.role||'customer',created_at:now(),last_sign_in_at:null,business_ids:db.business_members.filter(m=>m.user_id===u.id).map(m=>m.business_id)}}),error:null};
+      }
+      if(name==='admin_update_user'){
+        if(roleOf(me)!=='admin')return err('Only super users can change accounts','42501');
+        if(a.p_user===me.id&&a.p_role!=='admin')return err('You can’t remove your own super user role. Ask another super user.');
+        const p=db.profiles.find(x=>x.id===a.p_user);p.role=a.p_role;if(a.p_display_name)p.display_name=a.p_display_name;return {data:null,error:null};
+      }
       if(name==='place_order'){
         const b=db.businesses.find(x=>x.id===a.p_business_id);
         if(!b||!b.sells_online)return err('This shop is not taking orders');

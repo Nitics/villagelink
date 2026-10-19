@@ -2,19 +2,19 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { Icon } from '../components/Icon';
 import { SheetHeader } from '../components/ui';
-import { TOWNS } from '../lib/constants';
 import { BusinessSheet, EditBusinessSheet, ImportSheet, OrderSheet } from './BusinessSheets';
 import { ListingSheet, NewGroupSheet, NewListingSheet, PlanRequestSheet } from './CommunitySheets';
 import AuthSheet from './AuthSheet';
+import { EditGroupSheet, EditListingSheet, PersonSheet } from './AdminSheets';
 
 function TownSheet() {
-  const { data, town, setTown, closeSheet } = useApp();
+  const { data, town, towns, setTown, closeSheet } = useApp();
   const count = (t: string) => data.businesses.filter((b) => b.isActive && (t === 'all' || b.town === t)).length;
   const pick = (t: string) => { setTown(t); closeSheet(); };
   return (
     <>
       <SheetHeader title="Choose your area" />
-      {['all', ...TOWNS].map((t) => (
+      {['all', ...towns].map((t) => (
         <button key={t} className="card" onClick={() => pick(t)}>
           <span className="ic"><Icon name="pin" /></span>
           <span className="body"><span className="name">{t === 'all' ? 'All of Nkomazi' : t}</span>
@@ -55,6 +55,9 @@ export default function SheetHost() {
     case 'planRequest': content = <PlanRequestSheet />; break;
     case 'town': content = <TownSheet />; break;
     case 'auth': content = <AuthSheet reason={sheet.reason} initialMode={sheet.mode} />; break;
+    case 'editListing': content = <EditListingSheet key={sheet.id} id={sheet.id} />; break;
+    case 'editGroup': content = <EditGroupSheet key={sheet.id} id={sheet.id} />; break;
+    case 'person': content = <PersonSheet key={sheet.id} id={sheet.id} />; break;
   }
   return (
     <div className="scrim" onClick={(e) => { if (e.target === e.currentTarget) closeSheet(); }}>

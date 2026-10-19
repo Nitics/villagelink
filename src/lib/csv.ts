@@ -19,10 +19,10 @@ export function parseCSV(text: string): string[][] {
   return rows.filter((r) => r.some((x) => x.trim()));
 }
 
-export const normTown = (t: string) => {
+export const normTown = (t: string, towns: readonly string[] = TOWNS) => {
   const v = String(t || '').trim();
   const flat = v.toLowerCase().replace(/\s/g, '');
-  return TOWNS.find((x) => x.toLowerCase().replace(/\s/g, '') === flat) ?? v;
+  return towns.find((x) => x.toLowerCase().replace(/\s/g, '') === flat) ?? v;
 };
 
 /** A row ready for the businesses table. */
@@ -46,7 +46,7 @@ export interface BusinessRow {
 export interface ParsedImport { rows: BusinessRow[]; problems: string[] }
 
 /** Reads a spreadsheet export. Accepts the app template and the Supabase template column names. */
-export function businessesFromCSV(text: string): ParsedImport {
+export function businessesFromCSV(text: string, towns: readonly string[] = TOWNS): ParsedImport {
   const rows = parseCSV(text);
   if (rows.length < 2) return { rows: [], problems: ['No rows found. Check that the first row has column names.'] };
   const head = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
@@ -67,8 +67,8 @@ export function businessesFromCSV(text: string): ParsedImport {
       problems.push(`Row ${line} (${name}): unknown category “${category}”, saved as “other”.`);
       category = 'other';
     }
-    const town = normTown(get(r, 'town', 'village', 'area'));
-    if (town && !(TOWNS as readonly string[]).includes(town)) problems.push(`Row ${line} (${name}): town “${town}” isn’t in the Nkomazi list, saved without a town.`);
+    const town = normTown(get(r, 'town', 'village', 'area'), towns);
+    if (town && !towns.includes(town)) problems.push(`Row ${line} (${name}): town “${town}” isn’t in the Nkomazi list, saved without a town.`);
     const hours = get(r, 'opening_hours', 'hours');
     if (hours && !parseHours(hours)) problems.push(`Row ${line} (${name}): couldn’t read hours “${hours}”.`);
     const plan = get(r, 'plan').toLowerCase();
@@ -76,7 +76,7 @@ export function businessesFromCSV(text: string): ParsedImport {
       name,
       category,
       type_label: get(r, 'type_label', 'type') || null,
-      town: (TOWNS as readonly string[]).includes(town) ? town : null,
+      town: towns.includes(town) ? town : null,
       address: get(r, 'address') || null,
       phone: get(r, 'phone') || null,
       whatsapp: get(r, 'whatsapp') || null,
