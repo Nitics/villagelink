@@ -71,9 +71,21 @@ npm run build      # production build in dist/
 
    Without this, the links in sign-up and password-reset emails won’t open the app.
 
-## Switch on the assistant
+## The local agent (Ask › Local help)
 
-The assistant runs as the Supabase Edge Function `assistant`. It needs an Anthropic API key:
+Built into the app (`src/lib/agent.ts`), free and instant, with no AI key. It answers from the live Supabase data, refreshing it if it is more than a minute old:
+
+- what’s open now or on a given day, by type and town (“fuel open now in Malelane?”, “clinic on Sunday”)
+- one business by name (“when does OneStop close?”, “Praxoz phone number”)
+- products and prices, cheapest first (“where can I buy bread?”)
+- the marketplace (“who fixes phones?”), study groups (“maths study group”) and your own orders
+- emergencies always put 10111, 10177 and 112 first
+
+It only repeats what is in the data and always says how sure a status is. Its behaviour is covered by `src/lib/agent.test.ts`.
+
+## Switch on the homework assistant
+
+Homework help runs as the Supabase Edge Function `assistant` (Claude). Until it has a key, Homework help suggests matching study groups instead. It needs an Anthropic API key:
 
 1. Create a key at console.anthropic.com and set a monthly spending limit.
 2. In Supabase, open **Edge Functions › Secrets** and add `ANTHROPIC_API_KEY`.

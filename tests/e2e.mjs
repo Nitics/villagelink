@@ -85,8 +85,21 @@ try {
   await page.keyboard.press('Escape'); await wait();
 
   await go('/ask');
-  await page.fill('#askInput', 'Which fuel stations are open now?'); await page.click('form.composer button[type=submit]'); await wait(800);
-  check('Assistant answers in local mode', await has('[local] answer to: which fuel stations are open now?'));
+  await page.fill('#askInput', 'Which fuel stations are open now?'); await page.click('form.composer button[type=submit]'); await wait(900);
+  const fuelAns = (await page.locator('.msg.ai').last().innerText()).toLowerCase();
+  check('Agent: fuel open now, from the database', fuelAns.includes('likely open now') && fuelAns.includes('praxoz') && fuelAns.includes('confirmed ='));
+  check('Agent did not call the AI server', !(await page.evaluate(() => window.__fake.calls.includes('fn:assistant'))));
+  await page.fill('#askInput', 'Where can I buy bread?'); await page.keyboard.press('Enter'); await wait(900);
+  check('Agent: product price and shop', (await page.locator('.msg.ai').last().innerText()).includes('White bread: R18 / loaf at OneStop Tuck Shop'));
+  await page.locator('.msg.ai').last().getByRole('button', { name: /OneStop Tuck Shop/ }).click(); await wait(500);
+  check('Agent result opens the business', (await page.locator('.sheet h2').innerText()) === 'OneStop Tuck Shop');
+  await page.keyboard.press('Escape'); await wait();
+  await page.fill('#askInput', 'When does Mangweni Clinic open on Saturday?'); await page.keyboard.press('Enter'); await wait(900);
+  check('Agent: named business on a day', (await page.locator('.msg.ai').last().innerText()).includes('Saturday: closed'));
+  await page.fill('#askInput', 'Help! Ambulance, there was an accident'); await page.keyboard.press('Enter'); await wait(900);
+  check('Agent: emergency numbers first', (await page.locator('.msg.ai').last().innerText()).startsWith('In an emergency, phone now:'));
+  await page.fill('#askInput', 'Who fixes phones?'); await page.keyboard.press('Enter'); await wait(900);
+  check('Agent: marketplace has nothing for that yet', (await page.locator('.msg.ai').last().innerText()).toLowerCase().includes('marketplace'));
   await tapText('Homework help');
   await page.fill('#askInput', 'Explain Pythagoras'); await page.keyboard.press('Enter'); await wait(800);
   check('Assistant answers in homework mode', await has('[school] answer to: explain pythagoras'));
