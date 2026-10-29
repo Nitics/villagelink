@@ -108,24 +108,41 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
 
   const kws = keywords(q);
 
-  // 2. Jobs and piece work.
-  if (JOB_WORDS.test(q) && !/\b(open|close|closes|closed|hours)\b/.test(q)) {
-    const wantPiece = /\b(piece|once|today|tomorrow|weekend|saturday|sunday)\b/.test(q);
-    const wantJob = /\b(permanent|full.?time|ongoing|position|vacanc(y|ies))\b/.test(q);
-    const open = data.jobs.filter((j) => jobIsOpen(j, now)).filter((j) => (wantPiece && !wantJob ? j.kind === 'piece' : wantJob && !wantPiece ? j.kind === 'job' : true));
-    const generic = ['job', 'work', 'piece', 'hiring', 'hire', 'vacancy', 'employment', 'worker', 'helper', 'part', 'time', 'casual', 'looking', 'anyone', 'someone', 'weekend', 'saturday', 'sunday', 'permanent', 'full', 'ongoing', 'position'];
-    const skill = kws.filter((w) => !generic.includes(w) && !ctx.towns.some((t) => norm(t).includes(w)));
-    const bySkill = skill.length ? open.filter((j) => skill.some((w) => norm(`${j.title} ${j.description}`).includes(w))) : [];
-    const pool = bySkill.length ? bySkill : open;
+  // Jobs: open posts, and the ones whose title or details match the words used (e.g. "builder", "builds houses").
+  const openJobs = data.jobs.filter((j) => jobIsOpen(j, now));
+  const JOB_GENERIC = ['job', 'work', 'piece', 'hiring', 'hire', 'vacancy', 'employment', 'employ', 'employer', 'worker', 'helper', 'part', 'time', 'casual',
+    'looking', 'anyone', 'someone', 'weekend', 'saturday', 'sunday', 'permanent', 'full', 'ongoing', 'position', 'need', 'who', 'local', 'today'];
+  const jobSkill = kws.filter((w) => !JOB_GENERIC.includes(w) && !ctx.towns.some((t) => norm(t).includes(w)));
+  // "builds" should find "Builder" and "building": compare on a short stem too.
+  const stem = (w: string) => (w.length > 5 ? w.replace(/(ing|ers?|s)$/, '') : w);
+  const jobText = (j: (typeof openJobs)[number]) => norm(`${j.title} ${j.description}`);
+  const jobsBySkill = jobSkill.length ? openJobs.filter((j) => jobSkill.some((w) => jobText(j).includes(w) || jobText(j).includes(stem(w)))) : [];
+
+  const jobsAnswer = (pool: typeof openJobs, matched: boolean, note = ''): AgentAnswer => {
     const local = pool.filter(inTown);
     const list = (local.length ? local : pool).slice(0, 6);
-    if (!list.length) return { text: `No open jobs or piece work ${where} right now. Check Market › Jobs later, or post work you need done there.`, results: [], understood: true };
-    const pay = (j: typeof list[number]) => (j.pay == null ? 'pay to discuss' : `${rand(j.pay)}${j.payUnit ? ` ${PAY_UNITS[j.payUnit]}` : ''}`);
-    const head = !local.length && town ? `Nothing open ${where}, so here is the rest of Nkomazi:` : `Open work ${local.length ? where : 'in Nkomazi'}${bySkill.length ? ' matching that' : ''}:`;
+    const pay = (j: (typeof list)[number]) => (j.pay == null ? 'pay to discuss' : `${rand(j.pay)}${j.payUnit ? ` ${PAY_UNITS[j.payUnit]}` : ''}`);
+    const head = !local.length && town
+      ? `Nothing open ${where}, so here is the rest of Nkomazi:`
+      : `${matched ? 'Work posted that matches' : 'Open work'} ${local.length ? where : 'in Nkomazi'}:`;
     return {
-      text: [head, ...list.map((j) => `• ${j.title} (${JOB_KINDS[j.kind].short.toLowerCase()}, ${j.town || 'Nkomazi'}): ${pay(j)}${j.workWhen ? `, ${j.workWhen}` : ''}. ${j.posterName}, ${j.phone}`), JOB_SAFETY].join('\n'),
+      text: [note + head, ...list.map((j) => `• ${j.title} (${JOB_KINDS[j.kind].short.toLowerCase()}, ${j.town || 'Nkomazi'}): ${pay(j)}${j.workWhen ? `, ${j.workWhen}` : ''}. ${j.posterName}, ${j.phone}`),
+        'See Market › Jobs for details.', JOB_SAFETY].join('\n'),
       results: list.map((j) => ({ kind: 'job' as const, id: j.id, label: j.title })), understood: true,
     };
+  };
+
+  // 2. Jobs and piece work asked for directly.
+  if (JOB_WORDS.test(q) && !/\b(open|close|closes|closed|hours)\b/.test(q)) {
+    if (!openJobs.length) return { text: `No open jobs or piece work ${where} right now. Check Market › Jobs later, or post work you need done there.`, results: [], understood: true };
+    if (jobsBySkill.length) return jobsAnswer(jobsBySkill, true);
+    const wantPiece = /\b(piece|once|today|tomorrow|weekend|saturday|sunday)\b/.test(q);
+    const wantJob = /\b(permanent|full.?time|ongoing|position|vacanc(y|ies))\b/.test(q);
+    const ofKind = openJobs.filter((j) => (wantPiece && !wantJob ? j.kind === 'piece' : wantJob && !wantPiece ? j.kind === 'job' : true));
+    if (ofKind.length) return jobsAnswer(ofKind, false);
+    // Nothing of the kind asked for: say so, and show what is open.
+    const asked = wantPiece ? 'piece work' : 'ongoing jobs';
+    return jobsAnswer(openJobs, false, `No ${asked} posted right now. `);
   }
 
   // 3. Greetings and help.
@@ -191,6 +208,7 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
     const hits = listings.filter((l) => !kw.length || kw.some((w) => norm(`${l.title} ${l.note}`).includes(w) || (w.startsWith('fix') && /repair|fix/.test(norm(l.title)))));
     const local = hits.filter(inTown);
     const list = (local.length ? local : hits).slice(0, 6);
+    if (!list.length && jobsBySkill.length) return jobsAnswer(jobsBySkill, true);
     if (!list.length) return { text: `Nothing like that on the marketplace ${where} right now. You can post what you’re looking for under Market › Buy & sell.`, results: [], understood: true };
     return {
       text: [`On the marketplace${local.length ? ` ${where}` : ''}:`, ...list.map((l) => `• ${l.title}: ${rand(l.price)}${l.unit ? ` ${l.unit}` : ''} (${LISTING_KINDS[l.kind].label.toLowerCase()}, ${l.town}). ${l.sellerName}, ${l.phone}`)].join('\n'),
@@ -256,7 +274,8 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
     return { text: `${missingSub}${wider}${head}\n${list.map((b) => line(b, now)).join('\n')}\n${sureNote}`, results: list.map(ref), understood: true };
   }
 
-  // 9. Last try: search everything for the words used.
+  // 9. Last try: search everything for the words used (jobs first, then businesses and listings).
+  if (jobsBySkill.length) return jobsAnswer(jobsBySkill, true);
   if (kws.length) {
     const biz = active.filter((b) => kws.some((w) => norm(`${b.name} ${b.typeLabel} ${b.description}`).includes(w))).slice(0, 4);
     const lst = data.listings.filter((l) => l.isActive && kws.some((w) => norm(`${l.title} ${l.note}`).includes(w))).slice(0, 3);
@@ -268,7 +287,7 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
     }
   }
   return {
-    text: 'Sorry, I couldn’t find that in VillageLink. Try asking about a type of place (fuel, shop, clinic, police), a business by name, a product like “bread”, the marketplace, or study groups.',
+    text: 'Sorry, I couldn’t find that in VillageLink. Try asking about a type of place (fuel, shop, clinic, police), a business by name, a product like “bread”, jobs, the marketplace, or study groups.',
     results: [], understood: false,
   };
 }
