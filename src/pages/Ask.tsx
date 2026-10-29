@@ -77,6 +77,7 @@ export default function Ask() {
   const open = (r: ResultRef) => {
     if (r.kind === 'business') openSheet({ kind: 'business', id: r.id });
     else if (r.kind === 'listing') openSheet({ kind: 'listing', id: r.id });
+    else if (r.kind === 'job') openSheet({ kind: 'job', id: r.id });
     else window.location.hash = '#/study';
   };
   const submit = (e: FormEvent) => { e.preventDefault(); ask(text); };
@@ -104,7 +105,7 @@ export default function Ask() {
               <div className="chips" style={{ flexWrap: 'wrap', marginTop: 8 }}>
                 {m.results.map((r) => (
                   <button key={`${r.kind}:${r.id}`} className="chip" onClick={() => open(r)}>
-                    <Icon name={r.kind === 'business' ? 'pin' : r.kind === 'listing' ? 'tag' : 'book'} size={14} /> {r.label}
+                    <Icon name={r.kind === 'business' ? 'pin' : r.kind === 'listing' ? 'tag' : r.kind === 'job' ? 'briefcase' : 'book'} size={14} /> {r.label}
                   </button>
                 ))}
               </div>

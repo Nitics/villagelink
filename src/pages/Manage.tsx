@@ -4,15 +4,16 @@ import { useApp } from '../state/AppContext';
 import { Icon } from '../components/Icon';
 import { Empty, OrderCard, ORDER_STATUS } from '../components/ui';
 import { DeleteButton, ROLE_LABEL, personLabel } from '../sheets/AdminSheets';
+import { JobBadge, payText } from '../sheets/JobSheets';
 import { GROUPS, HOURS_STALE_DAYS, LISTING_KINDS, PLANS, groupOf } from '../lib/constants';
 import { ago, hoursAgeDays, minsSince, parseHours } from '../lib/hours';
 import { rand } from '../lib/format';
 import { actions } from '../lib/actions';
 import type { Account, Order, OrderStatus } from '../lib/types';
 
-type Tab = 'orders' | 'businesses' | 'listings' | 'groups' | 'requests' | 'people' | 'towns';
+type Tab = 'orders' | 'businesses' | 'listings' | 'jobs' | 'groups' | 'requests' | 'people' | 'towns';
 const TAB_LABEL: Record<Tab, string> = {
-  orders: 'Orders', businesses: 'Businesses', listings: 'Listings', groups: 'Study groups', requests: 'Plan requests', people: 'People', towns: 'Towns',
+  orders: 'Orders', businesses: 'Businesses', listings: 'Listings', jobs: 'Jobs', groups: 'Study groups', requests: 'Plan requests', people: 'People', towns: 'Towns',
 };
 
 const matches = (q: string, ...fields: (string | undefined)[]) =>
@@ -147,8 +148,8 @@ export default function Manage() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   const tabs: Tab[] = useMemo(() => (isAdmin
-    ? ['orders', 'businesses', 'people', 'listings', 'groups', 'requests', 'towns']
-    : ['orders', 'businesses', 'listings', 'groups', 'requests']), [isAdmin]);
+    ? ['orders', 'businesses', 'people', 'listings', 'jobs', 'groups', 'requests', 'towns']
+    : ['orders', 'businesses', 'listings', 'jobs', 'groups', 'requests']), [isAdmin]);
   const tab = (tabs.includes(params.get('tab') as Tab) ? params.get('tab') : 'orders') as Tab;
 
   if (!user || (!isStaff && !myBusinesses.size)) {
@@ -220,6 +221,25 @@ export default function Manage() {
           <Icon name="chev" />
         </button>
       ))}</> : <span className="small muted">No listings.</span>;
+      break;
+    }
+    case 'jobs': {
+      const list = data.jobs.filter((j) => matches(q, j.title, j.posterName, j.town, j.phone, j.description));
+      body = (
+        <>
+          <button className="btn btn-ghost" onClick={() => openSheet({ kind: 'editJob', id: null })}><Icon name="plus" />Post a job</button>
+          {list.length ? list.map((j) => (
+            <button key={j.id} className="card" onClick={() => openSheet({ kind: 'job', id: j.id })}>
+              <span className="thumb"><Icon name="briefcase" /></span>
+              <span className="body">
+                <span className="between" style={{ alignItems: 'flex-start' }}><span className="name">{j.title}</span><JobBadge j={j} /></span>
+                <span className="meta">{payText(j)} · {j.posterName} · {j.phone} · {j.town || 'No town'} · {ago(minsSince(j.createdAt, now))}</span>
+              </span>
+              <Icon name="chev" />
+            </button>
+          )) : <span className="small muted">No job posts.</span>}
+        </>
+      );
       break;
     }
     case 'groups': {

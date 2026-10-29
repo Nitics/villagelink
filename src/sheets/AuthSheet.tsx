@@ -7,7 +7,7 @@ import { friendlyError } from '../lib/data';
 const WHY: Record<AuthReason, string> = {
   order: 'Sign in to send your order to the shop.', post: 'Sign in to post a listing.', group: 'Sign in to create a study group.',
   join: 'Sign in to join study groups.', report: 'Sign in to report what’s open.', plan: 'Sign in to request a business plan.',
-  ask: 'Sign in to ask VillageLink a question.',
+  ask: 'Sign in to ask VillageLink a question.', job: 'Sign in to post a job. People will contact you on the number you give.',
 };
 const TITLE: Record<AuthMode, string> = { signin: 'Sign in', signup: 'Create an account', reset: 'Reset your password', newpass: 'Choose a new password' };
 const BUTTON: Record<AuthMode, string> = { signin: 'Sign in', signup: 'Create account', reset: 'Send reset link', newpass: 'Save new password' };

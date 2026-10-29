@@ -1,7 +1,7 @@
 // Loads everything the app shows from Supabase and maps it to app shapes.
 import { supabase } from './supabase';
 import { REPORT_WINDOW_MIN } from './constants';
-import type { Business, Listing, Order, PlanRequest, Product, Report, StudyGroup } from './types';
+import type { Business, Job, Listing, Order, PlanRequest, Product, Report, StudyGroup } from './types';
 
 export interface Data {
   businesses: Business[];
@@ -12,9 +12,10 @@ export interface Data {
   orders: Order[]; // every order this account may see (own, own shop's, or all for staff)
   requests: PlanRequest[];
   towns: string[]; // from the towns table, in order
+  jobs: Job[];
 }
 
-export const emptyData = (): Data => ({ businesses: [], products: [], listings: [], groups: [], reports: {}, orders: [], requests: [], towns: [] });
+export const emptyData = (): Data => ({ businesses: [], products: [], listings: [], groups: [], reports: {}, orders: [], requests: [], towns: [], jobs: [] });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function mapBusiness(r: any): Business {
@@ -32,6 +33,19 @@ export const mapProduct = (p: any): Product => ({
   id: p.id, businessId: p.business_id, name: p.name, price: +p.price, unit: p.unit ?? '', inStock: !!p.in_stock,
 });
 
+export const mapJob = (j: any): Job => ({
+  id: j.id, kind: j.kind === 'job' ? 'job' : 'piece', title: j.title, description: j.description ?? '',
+  pay: j.pay == null ? null : +j.pay, payUnit: j.pay_unit ?? '', town: j.town ?? '', workWhen: j.work_when ?? '',
+  posterName: j.poster_name, phone: j.phone, closesOn: j.closes_on ?? '', isFilled: !!j.is_filled,
+  isActive: j.is_active !== false, ownerId: j.owner_id, createdAt: Date.parse(j.created_at),
+});
+
+/** Today's date in South Africa, yyyy-mm-dd. */
+export const todaySA = (ms = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date(ms));
+
+/** Open to applicants: shown, not filled, and not past its closing date. */
+export const jobIsOpen = (j: Job, ms = Date.now()) => j.isActive && !j.isFilled && (!j.closesOn || j.closesOn >= todaySA(ms));
+
 export interface LoadResult { data: Data; failed: boolean }
 
 export async function loadAll(userId: string | null): Promise<LoadResult> {
@@ -45,6 +59,8 @@ export async function loadAll(userId: string | null): Promise<LoadResult> {
     supabase.from('group_members').select('group_id,user_id').limit(5000),
     supabase.from('status_reports').select('business_id,is_open,created_at').gte('created_at', since).order('created_at', { ascending: false }),
     supabase.from('towns').select('name').order('sort_order').order('name'),
+    // Active jobs for everyone; posters also get their own hidden ones, staff get all (database rules decide).
+    supabase.from('jobs').select('*').order('created_at', { ascending: false }).limit(400),
   ];
   if (userId) {
     queries.push(supabase.from('orders').select('*,order_items(product_name,unit_price,qty)').order('created_at', { ascending: false }).limit(200));
@@ -74,13 +90,14 @@ export async function loadAll(userId: string | null): Promise<LoadResult> {
     })),
     reports,
     towns: (r[6].data ?? []).map((t: { name: string }) => t.name),
-    orders: userId ? (r[7].data ?? []).map((o: any): Order => ({
+    jobs: (r[7].data ?? []).map(mapJob),
+    orders: userId ? (r[8].data ?? []).map((o: any): Order => ({
       id: o.id, businessId: o.business_id, shopName: nameOf(o.business_id), customerId: o.customer_id,
       customerName: o.customer_name, customerPhone: o.customer_phone, method: o.method, deliveryAddress: o.delivery_address ?? '',
       note: o.note ?? '', status: o.status, total: +o.total, at: Date.parse(o.created_at),
       items: (o.order_items ?? []).map((i: any) => ({ name: i.product_name, price: +i.unit_price, qty: i.qty })),
     })) : [],
-    requests: userId ? (r[8].data ?? []).map((x: any): PlanRequest => ({
+    requests: userId ? (r[9].data ?? []).map((x: any): PlanRequest => ({
       id: x.id, businessName: x.business_name, town: x.town ?? '', plan: x.plan, contactName: x.contact_name, phone: x.phone,
       details: x.details ?? '', status: x.status, at: Date.parse(x.created_at), userId: x.user_id,
     })) : [],

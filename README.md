@@ -20,7 +20,7 @@ Resident reports (“I saw it open”) are shown for 4 hours but never change a 
 | Account | Can |
 | --- | --- |
 | Visitor (not signed in) | Browse businesses, products, listings and study groups |
-| Customer | Order from shops and cancel unaccepted orders, post listings, create and join study groups, report what’s open, request a business plan, use the assistant (30 questions a day) |
+| Customer | Order from shops and cancel unaccepted orders, post listings and jobs, create and join study groups, report what’s open, request a business plan, use the assistant (30 questions a day) |
 | Shop owner | Everything a customer can, plus confirm “open now”, update hours and contact details, manage products, handle their shop’s orders |
 | Staff | Add, import, edit, hide and delete businesses and products; edit, hide and delete any listing or study group; see all orders and change their status; handle plan requests |
 | Super user | Everything staff can do, plus: see all accounts, change roles and names, link shop owners to businesses, remove someone’s access; add, rename and remove towns; delete orders, plan requests and resident reports |
@@ -70,6 +70,10 @@ npm run build      # production build in dist/
    - **Redirect URLs:** add `https://YOUR-USERNAME.github.io/villagelink/**` and `http://localhost:5173/**`
 
    Without this, the links in sign-up and password-reset emails won’t open the app.
+
+## Local jobs and piece work (Market › Jobs)
+
+Anyone signed in can post once-off piece work or an ongoing job: what the work is, pay (per hour, day, week, month or for the job), town, when, and a phone or WhatsApp number. Filled or past-closing posts leave the list; posters can mark them filled, reopen, edit or delete. Staff and super users can edit, hide or delete any post under Manage › Jobs. Each person can post up to 10 a day, and every job shows a safety note (never pay to get a job). The agent answers questions like “any piece jobs this weekend?”.
 
 ## The local agent (Ask › Local help)
 

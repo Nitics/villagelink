@@ -2,7 +2,12 @@
 import { supabase } from './supabase';
 import { friendlyError } from './data';
 import type { BusinessRow } from './csv';
-import type { Account, ListingKind, OrderStatus, Plan, Role } from './types';
+import type { Account, JobKind, ListingKind, OrderStatus, PayUnit, Plan, Role } from './types';
+
+export interface JobInput {
+  kind: JobKind; title: string; description: string; pay: number | null; payUnit: PayUnit | '';
+  town: string; workWhen: string; posterName: string; phone: string; closesOn: string; isActive?: boolean;
+}
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -113,6 +118,18 @@ export const actions = {
       next_session: g.nextSession, town: g.town || null, contact: g.contact || null,
     }).eq('id', id)),
   deleteGroup: (id: string) => run(supabase.from('study_groups').delete().eq('id', id)),
+
+  /* ---- local jobs and piece work ---- */
+  saveJob: (id: string | null, j: JobInput) => {
+    const row = {
+      kind: j.kind, title: j.title, description: j.description || null, pay: j.pay, pay_unit: j.pay == null ? null : j.payUnit || null,
+      town: j.town || null, work_when: j.workWhen || null, poster_name: j.posterName, phone: j.phone, closes_on: j.closesOn || null,
+      ...(j.isActive === undefined ? {} : { is_active: j.isActive }),
+    };
+    return run(id ? supabase.from('jobs').update(row).eq('id', id) : supabase.from('jobs').insert(row));
+  },
+  setJobFilled: (id: string, filled: boolean) => run(supabase.from('jobs').update({ is_filled: filled }).eq('id', id)),
+  deleteJob: (id: string) => run(supabase.from('jobs').delete().eq('id', id)),
 
   /* ---- super user only ---- */
   deleteOrder: (id: string) => run(supabase.from('orders').delete().eq('id', id)),

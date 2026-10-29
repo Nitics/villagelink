@@ -18,9 +18,11 @@ export type SheetState =
   | { kind: 'auth'; reason?: AuthReason; mode?: AuthMode }
   | { kind: 'editListing'; id: string }
   | { kind: 'editGroup'; id: string }
-  | { kind: 'person'; id: string };
+  | { kind: 'person'; id: string }
+  | { kind: 'job'; id: string }
+  | { kind: 'editJob'; id: string | null };
 
-export type AuthReason = 'order' | 'post' | 'group' | 'join' | 'report' | 'plan' | 'ask';
+export type AuthReason = 'order' | 'post' | 'group' | 'join' | 'report' | 'plan' | 'ask' | 'job';
 export type AuthMode = 'signin' | 'signup' | 'reset' | 'newpass';
 
 interface Profile { role: Role; displayName: string }

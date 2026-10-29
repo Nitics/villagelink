@@ -6,6 +6,7 @@ import { BusinessSheet, EditBusinessSheet, ImportSheet, OrderSheet } from './Bus
 import { ListingSheet, NewGroupSheet, NewListingSheet, PlanRequestSheet } from './CommunitySheets';
 import AuthSheet from './AuthSheet';
 import { EditGroupSheet, EditListingSheet, PersonSheet } from './AdminSheets';
+import { EditJobSheet, JobSheet } from './JobSheets';
 
 function TownSheet() {
   const { data, town, towns, setTown, closeSheet } = useApp();
@@ -58,6 +59,8 @@ export default function SheetHost() {
     case 'editListing': content = <EditListingSheet key={sheet.id} id={sheet.id} />; break;
     case 'editGroup': content = <EditGroupSheet key={sheet.id} id={sheet.id} />; break;
     case 'person': content = <PersonSheet key={sheet.id} id={sheet.id} />; break;
+    case 'job': content = <JobSheet key={sheet.id} id={sheet.id} />; break;
+    case 'editJob': content = <EditJobSheet key={sheet.id ?? 'new'} id={sheet.id} />; break;
   }
   return (
     <div className="scrim" onClick={(e) => { if (e.target === e.currentTarget) closeSheet(); }}>
