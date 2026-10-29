@@ -108,7 +108,19 @@ describe('agent', () => {
   it('filters jobs by town, kind and skill', () => {
     expect(ask('piece work in Tonga').text).toMatch(/^Nothing open in Tonga, so here is the rest of Nkomazi:\n• Helper to clear a yard/);
     expect(ask('looking for a permanent job').text).not.toMatch(/Helper/);
-    expect(ask('anyone hiring a cashier').text).toMatch(/matching that:\n• Cashier at a spaza/);
+    expect(ask('anyone hiring a cashier').text).toMatch(/^Work posted that matches in Nkomazi:\n• Cashier at a spaza/);
+  });
+  it('finds jobs by skill words, even without the word “job”', () => {
+    const builder = { ...data, jobs: [{ ...data.jobs[0], id: 'jb', title: 'Builder', description: 'Building Houses, Security Walls and Toilets', town: 'Mangweni' }] };
+    for (const q of ['builder', 'I need a builder', 'Who builds houses?']) {
+      const a = answer(q, builder, ctx);
+      expect(a.text, q).toMatch(/^Work posted that matches in Nkomazi:\n• Builder \(piece work, Mangweni\)/);
+      expect(a.results[0], q).toEqual({ kind: 'job', id: 'jb', label: 'Builder' });
+    }
+  });
+  it('falls back to all open work when the kind asked for has none', () => {
+    const onlyPiece = { ...data, jobs: [data.jobs[0]] };
+    expect(answer('vacancies', onlyPiece, ctx).text).toMatch(/^No ongoing jobs posted right now\. Open work in Nkomazi:\n• Helper to clear a yard/);
   });
   it('admits when it does not know', () => {
     const a = ask('qwerty zxcvb');
