@@ -32,6 +32,15 @@ export const LISTING_KINDS: Record<ListingKind, { label: string; icon: string }>
   service: { label: 'Services', icon: 'wrench' },
 };
 
+export const JOB_KINDS: Record<'piece' | 'job', { label: string; short: string }> = {
+  piece: { label: 'Piece work (once-off)', short: 'Piece work' },
+  job: { label: 'Job (ongoing)', short: 'Job' },
+};
+export const PAY_UNITS: Record<'hour' | 'day' | 'week' | 'month' | 'once', string> = {
+  hour: 'per hour', day: 'per day', week: 'per week', month: 'per month', once: 'for the job',
+};
+export const JOB_SAFETY = 'Never pay money to get a job or to “register”. Meet in a public place first, and tell someone where you’re going.';
+
 export const SUBJECTS = [
   'Mathematics', 'Mathematical Literacy', 'Physical Sciences', 'Life Sciences', 'English', 'siSwati', 'Xitsonga',
   'isiZulu', 'Accounting', 'Geography', 'History', 'Business Studies',

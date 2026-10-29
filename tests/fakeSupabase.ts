@@ -17,7 +17,7 @@ export const createClient = (() => {
       {id:'b3',name:'Mangweni Clinic',category:'clinic',type_label:'Community clinic',town:'Tonga',address:'R571 Main Road',phone:'013 000 0000',whatsapp:'0723732395',opening_hours:'Mo-Fr 07:00-16:00; Sa,Su off',hours_checked:'2026-10-19',sells_online:false,plan:'free',latitude:null,longitude:null,description:null,source:'yours',confirmed_open:null,confirmed_at:null,confirmed_note:null,is_active:true,created_at:now()}
     ],
     products:[{id:'p1',business_id:'b1',name:'White bread',price:'18.00',unit:'loaf',in_stock:true,sort_order:0},{id:'p2',business_id:'b1',name:'Sugar 2.5 kg',price:'52.00',unit:'bag',in_stock:false,sort_order:1}],
-    listings:[],study_groups:[],group_members:[],status_reports:[],orders:[],order_items:[],plan_requests:[],
+    listings:[],jobs:[],study_groups:[],group_members:[],status_reports:[],orders:[],order_items:[],plan_requests:[],
     profiles:[],business_members:[{business_id:'b1',user_id:'u-owner'}],
     towns:['Malelane','Komatipoort','Hectorspruit','Marloth Park','KaMaqhekeza','Kamhlushwa','Tonga','Mangweni','Naas','Schoemansdal','Jeppes Reef','Driekoppies','Mbuzini','Steenbok','Langeloop'].map((name,i)=>({name,sort_order:i+1}))
   };
@@ -52,6 +52,7 @@ export const createClient = (() => {
         const out=payload.map(p=>{
           const r={id:uid(),created_at:now(),...p};
           if(table==='listings'){r.owner_id=me.id;r.is_active=true}
+          if(table==='jobs'){r.owner_id=me.id;r.is_active=true;r.is_filled=false}
           if(table==='study_groups')r.owner_id=me.id;
           if(table==='group_members'||table==='status_reports'||table==='plan_requests')r.user_id=me.id;
           if(table==='plan_requests')r.status='new';
@@ -67,6 +68,7 @@ export const createClient = (() => {
         return {data:single?out[0]:out,error:null};
       }
       let list=T.filter(r=>filters.every(f=>f(r)));
+      if((op==='update'||op==='delete')&&table==='jobs'&&!staffish(me))list=list.filter(j=>me&&j.owner_id===me.id);
       if(op==='update'){
         if(table==='towns'&&payload.name)list.forEach(t=>db.businesses.forEach(b=>{if(b.town===t.name)b.town=payload.name}));
         list.forEach(r=>Object.assign(r,payload));return {data:single?list[0]:list,error:null}}
@@ -75,6 +77,7 @@ export const createClient = (() => {
         if(['orders','plan_requests','status_reports','towns'].includes(table)&&roleOf(me)!=='admin')return {data:null,error:null};
         db[table]=T.filter(r=>!list.includes(r));return {data:null,error:null}}
       if(table==='businesses'&&!staffish(me))list=list.filter(b=>b.is_active!==false);
+      if(table==='jobs'&&!staffish(me))list=list.filter(j=>j.is_active!==false||(me&&j.owner_id===me.id));
       if(table==='listings'&&!staffish(me))list=list.filter(l=>l.is_active!==false||(me&&l.owner_id===me.id));
       if(table==='orders'){list=list.filter(o=>me&&(o.customer_id===me.id||staffish(me)||db.business_members.some(m=>m.user_id===me.id&&m.business_id===o.business_id)))}
       if(table==='plan_requests'){list=list.filter(r=>me&&(r.user_id===me.id||staffish(me)))}

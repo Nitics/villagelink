@@ -1,12 +1,12 @@
 // VillageLink's built-in agent: answers everyday questions from the live database, with no AI service.
 // It is deliberately predictable: it only ever repeats what is in the data, and always says how sure a status is.
-import { LISTING_KINDS, groupOf, type Group } from './constants';
+import { JOB_KINDS, JOB_SAFETY, LISTING_KINDS, PAY_UNITS, groupOf, type Group } from './constants';
 import { DAYS, STATUS_LABEL, clock, fmtMin, hoursHint, isOpenish, parseHours, sortBusinesses, statusOf, verifyLine } from './hours';
 import { rand } from './format';
-import type { Data } from './data';
+import { jobIsOpen, type Data } from './data';
 import type { Business } from './types';
 
-export type ResultRef = { kind: 'business' | 'listing' | 'group'; id: string; label: string };
+export type ResultRef = { kind: 'business' | 'listing' | 'group' | 'job'; id: string; label: string };
 export interface AgentAnswer { text: string; results: ResultRef[]; understood: boolean }
 export interface AgentContext { now: number; town: string; towns: string[]; userId: string | null }
 
@@ -27,6 +27,7 @@ const HELP = /\b(help|what can you do|how does this work|what do you do)\b/;
 const OPEN_WORDS = /\b(open|opened|closes?|closing|closed|now|today|tonight|hours|time|times|when)\b/;
 const PRICE_WORDS = /\b(price|prices|cost|costs|how much|cheap|cheapest|rand|buy|sell|sells|selling|get|have|stock|available)\b/;
 const MARKET_WORDS = /\b(for sale|second.?hand|used|marketplace|market|listing|listings|selling|service|services|repair|repairs|fix|fixes|fixing|plumber|electrician|tutor|tutoring|transport|taxi|hair|salon|braids|mechanic|welding|builder|produce|vegetables|fruit)\b/;
+const JOB_WORDS = /\b(jobs?|work|works|working|piece ?jobs?|piece ?work|hiring|hire|vacanc(y|ies)|employ(ment|er|ed)?|helpers?|workers?|part.?time|casual|labou?r(er)?s?|domestic|gardener|cashier|umsebenti|ntirho|msebenzi|itoho)\b/;
 const STUDY_WORDS = /\b(study|studies|study group|homework|learners?|grade|matric|exam|exams|revision|maths?|mathematics|science|physics|biology|english|accounting|geography|history|siswati|xitsonga|isizulu)\b/;
 const ORDER_WORDS = /\b(my orders?|order status|where is my order|did .* accept)\b/;
 
@@ -105,15 +106,37 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
     return { text: parts.join('\n'), results: [...police.slice(0, 3), ...clinics.slice(0, 3)].map(ref), understood: true };
   }
 
-  // 2. Greetings and help.
+  const kws = keywords(q);
+
+  // 2. Jobs and piece work.
+  if (JOB_WORDS.test(q) && !/\b(open|close|closes|closed|hours)\b/.test(q)) {
+    const wantPiece = /\b(piece|once|today|tomorrow|weekend|saturday|sunday)\b/.test(q);
+    const wantJob = /\b(permanent|full.?time|ongoing|position|vacanc(y|ies))\b/.test(q);
+    const open = data.jobs.filter((j) => jobIsOpen(j, now)).filter((j) => (wantPiece && !wantJob ? j.kind === 'piece' : wantJob && !wantPiece ? j.kind === 'job' : true));
+    const generic = ['job', 'work', 'piece', 'hiring', 'hire', 'vacancy', 'employment', 'worker', 'helper', 'part', 'time', 'casual', 'looking', 'anyone', 'someone', 'weekend', 'saturday', 'sunday', 'permanent', 'full', 'ongoing', 'position'];
+    const skill = kws.filter((w) => !generic.includes(w) && !ctx.towns.some((t) => norm(t).includes(w)));
+    const bySkill = skill.length ? open.filter((j) => skill.some((w) => norm(`${j.title} ${j.description}`).includes(w))) : [];
+    const pool = bySkill.length ? bySkill : open;
+    const local = pool.filter(inTown);
+    const list = (local.length ? local : pool).slice(0, 6);
+    if (!list.length) return { text: `No open jobs or piece work ${where} right now. Check Market › Jobs later, or post work you need done there.`, results: [], understood: true };
+    const pay = (j: typeof list[number]) => (j.pay == null ? 'pay to discuss' : `${rand(j.pay)}${j.payUnit ? ` ${PAY_UNITS[j.payUnit]}` : ''}`);
+    const head = !local.length && town ? `Nothing open ${where}, so here is the rest of Nkomazi:` : `Open work ${local.length ? where : 'in Nkomazi'}${bySkill.length ? ' matching that' : ''}:`;
+    return {
+      text: [head, ...list.map((j) => `• ${j.title} (${JOB_KINDS[j.kind].short.toLowerCase()}, ${j.town || 'Nkomazi'}): ${pay(j)}${j.workWhen ? `, ${j.workWhen}` : ''}. ${j.posterName}, ${j.phone}`), JOB_SAFETY].join('\n'),
+      results: list.map((j) => ({ kind: 'job' as const, id: j.id, label: j.title })), understood: true,
+    };
+  }
+
+  // 3. Greetings and help.
   if (GREETING.test(q) && q.split(' ').length <= 3 || HELP.test(q) && q.split(' ').length <= 6) {
     return {
-      text: 'Hi! I answer from VillageLink’s live information. Try:\n• “Fuel open now in Malelane?”\n• “When does OneStop close?”\n• “Where can I buy bread?”\n• “Who fixes phones?”\n• “Maths study group”\n• “Where is my order?”\nIn an emergency phone 10111 (police) or 10177 (ambulance).',
+      text: 'Hi! I answer from VillageLink’s live information. Try:\n• “Fuel open now in Malelane?”\n• “When does OneStop close?”\n• “Where can I buy bread?”\n• “Who fixes phones?”\n• “Any piece jobs this weekend?”\n• “Maths study group”\n• “Where is my order?”\nIn an emergency phone 10111 (police) or 10177 (ambulance).',
       results: [], understood: true,
     };
   }
 
-  // 3. My orders.
+  // 3b. My orders.
   if (ORDER_WORDS.test(q)) {
     if (!ctx.userId) return { text: 'Sign in to see your orders. They show under Market › My orders.', results: [], understood: true };
     const mine = data.orders.filter((o) => o.customerId === ctx.userId).slice(0, 5);
@@ -146,7 +169,6 @@ export function answer(question: string, data: Data, ctx: AgentContext): AgentAn
   }
 
   // 5. Products and prices.
-  const kws = keywords(q);
   const productHits = data.products.filter((p) => p.inStock && kws.some((w) => norm(p.name).includes(w)))
     .map((p) => ({ p, b: active.find((b) => b.id === p.businessId) }))
     .filter((x): x is { p: typeof x.p; b: Business } => !!x.b);

@@ -109,6 +109,33 @@ try {
   await page.click('.sheet button[type=submit]'); await wait(800);
   check('Customer requests a business plan', await has('thandi bakes'));
 
+  // jobs: post, see, agent, mark filled
+  await go('/market?tab=jobs');
+  check('Jobs tab shows empty state', await has('no open work in all of nkomazi'));
+  await tapText('Post a job or piece work');
+  await page.fill('#jb_t', 'Helper to clear a yard'); await page.fill('#jb_p', '250'); await page.selectOption('#jb_town', 'Malelane');
+  await page.fill('#jb_w', 'Sat 08:00'); await page.fill('#jb_n', 'Thandi'); await page.fill('#jb_ph', '123');
+  await page.click('.sheet button[type=submit]'); await wait();
+  check('Job form refuses a short phone number', await has('at least 9 digits'));
+  await page.fill('#jb_ph', '072 111 2222'); await page.click('.sheet button[type=submit]'); await wait(900);
+  check('Job posted and listed as yours', (await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).count()) === 1 && await has('r250 per day') && await has('your post'));
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).first().click(); await wait();
+  check('Job sheet shows WhatsApp and safety note', (await page.locator('.sheet').getByRole('link', { name: /WhatsApp/ }).count()) === 1 && (await page.locator('.sheet').innerText()).includes('Never pay money'));
+  await page.keyboard.press('Escape'); await wait();
+  await go('/');
+  check('Home shows open jobs count', await has('1 open in all of nkomazi'));
+  await go('/ask');
+  await page.fill('#askInput', 'Any piece jobs this weekend?'); await page.keyboard.press('Enter'); await wait(900);
+  check('Agent finds the job', (await page.locator('.msg.ai').last().innerText()).includes('Helper to clear a yard (piece work, Malelane): R250 per day, Sat 08:00. Thandi, 072 111 2222'));
+  await go('/market?tab=jobs');
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).click(); await wait();
+  await page.locator('.sheet').getByRole('button', { name: 'Mark as filled' }).click(); await wait(800);
+  await page.keyboard.press('Escape'); await wait();
+  check('Filled job leaves the open list, shows under your filled posts', (await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).count()) === 1 && await has('your filled and closed posts') && await has('no open work'));
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).click(); await wait();
+  await page.locator('.sheet').getByRole('button', { name: 'Mark open again' }).click(); await wait(800);
+  await page.keyboard.press('Escape'); await wait();
+
   // ---- Shop owner ----
   await signIn('owner@test.co.za');
   await go('/profile');
@@ -132,6 +159,10 @@ try {
   await page.keyboard.press('Escape'); await wait();
   await tapText('Praxoz');
   check('Owner gets no tools on another business', !(await has('confirm open now')));
+  await page.keyboard.press('Escape'); await wait();
+  await go('/market?tab=jobs');
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).first().click(); await wait();
+  check('Others get no edit tools on a job', !(await page.locator('.sheet').innerText()).includes('Mark as filled'));
   await page.keyboard.press('Escape'); await wait();
 
   // ---- Staff ----
@@ -214,6 +245,18 @@ try {
   await page.locator('.sheet').getByRole('button', { name: 'Delete study group' }).click(); await wait(200);
   await page.locator('.sheet').getByRole('button', { name: 'Tap again to delete for good' }).click(); await wait(800);
   check('Super user deletes a study group', !(await has('algebra revision')));
+
+  // jobs
+  await tabTo('Jobs');
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).click(); await wait();
+  await page.locator('.sheet').getByRole('button', { name: 'Edit' }).click(); await wait();
+  await page.fill('#jb_p', '300'); await page.uncheck('#jb_a');
+  await page.locator('.sheet').getByRole('button', { name: 'Save post' }).click(); await wait(800);
+  check('Super user edits and hides a job', (await page.evaluate(() => { const j = window.__fake.db.jobs[0]; return j.pay === 300 && j.is_active === false; })) && await has('hidden'));
+  await page.locator('main button.card', { hasText: 'Helper to clear a yard' }).click(); await wait();
+  await page.locator('.sheet').getByRole('button', { name: 'Delete post' }).click(); await wait(200);
+  await page.locator('.sheet').getByRole('button', { name: 'Tap again to delete for good' }).click(); await wait(800);
+  check('Super user deletes a job', (await page.evaluate(() => window.__fake.db.jobs.length)) === 0);
 
   // plan requests
   await tabTo('Plan requests');

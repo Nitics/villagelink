@@ -28,6 +28,12 @@ const data: Data = {
     { id: 'p3', businessId: 'Tonga Butchery', name: 'Brown bread', price: 17, unit: 'loaf', inStock: true },
   ],
   listings: [{ id: 'l1', kind: 'service', title: 'Phone screen repairs', price: 250, unit: 'from', town: 'KaMaqhekeza', sellerName: 'Sipho', phone: '073 000 0203', note: '', ownerId: 'x', createdAt: NOW, isActive: true }],
+  jobs: [
+    { id: 'j1', kind: 'piece', title: 'Helper to clear a yard', description: 'Bring gloves', pay: 250, payUnit: 'day', town: 'Malelane', workWhen: 'Sat 08:00', posterName: 'Mr Nkosi', phone: '072 000 0301', closesOn: '', isFilled: false, isActive: true, ownerId: 'x', createdAt: NOW },
+    { id: 'j2', kind: 'job', title: 'Cashier at a spaza', description: '', pay: 3500, payUnit: 'month', town: 'Tonga', workWhen: 'Start Monday', posterName: 'Gogo', phone: '072 000 0302', closesOn: '', isFilled: false, isActive: true, ownerId: 'x', createdAt: NOW },
+    { id: 'j3', kind: 'piece', title: 'Painter for a house', description: '', pay: null, payUnit: '', town: 'Tonga', workWhen: '', posterName: 'Sipho', phone: '072 000 0303', closesOn: '', isFilled: true, isActive: true, ownerId: 'x', createdAt: NOW },
+    { id: 'j4', kind: 'piece', title: 'Old post', description: '', pay: 100, payUnit: 'once', town: 'Tonga', workWhen: '', posterName: 'X', phone: '072 000 0304', closesOn: '2026-10-01', isFilled: false, isActive: true, ownerId: 'x', createdAt: NOW },
+  ],
   groups: [{ id: 'g1', subject: 'Mathematics', grade: 'Grade 12', title: 'Paper 1 revision', place: 'Library', isOnline: false, nextSession: 'Thu 15:00', town: 'Malelane', contact: '', ownerId: 'x', members: [] }],
 };
 const ctx = { now: NOW, town: 'all', towns: [...TOWNS], userId: null };
@@ -90,6 +96,19 @@ describe('agent', () => {
     const a = ask('pharmacy open now');
     expect(a.text).toMatch(/^No pharmacies are listed in VillageLink yet\. Other health services:/);
     expect(a.text).toMatch(/Health services likely open now/);
+  });
+  it('finds open jobs and piece work, never filled or closed ones', () => {
+    const a = ask('Any jobs?');
+    expect(a.text).toMatch(/Helper to clear a yard \(piece work, Malelane\): R250 per day, Sat 08:00\. Mr Nkosi, 072 000 0301/);
+    expect(a.text).toMatch(/Cashier at a spaza \(job, Tonga\): R3[ \u00a0]?500 per month/);
+    expect(a.text).not.toMatch(/Painter|Old post/);
+    expect(a.text).toMatch(/Never pay money to get a job/);
+    expect(a.results.map((r) => r.kind)).toEqual(['job', 'job']);
+  });
+  it('filters jobs by town, kind and skill', () => {
+    expect(ask('piece work in Tonga').text).toMatch(/^Nothing open in Tonga, so here is the rest of Nkomazi:\n• Helper to clear a yard/);
+    expect(ask('looking for a permanent job').text).not.toMatch(/Helper/);
+    expect(ask('anyone hiring a cashier').text).toMatch(/matching that:\n• Cashier at a spaza/);
   });
   it('admits when it does not know', () => {
     const a = ask('qwerty zxcvb');

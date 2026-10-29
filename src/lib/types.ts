@@ -111,6 +111,27 @@ export interface PlanRequest {
   userId: string;
 }
 
+export type JobKind = 'piece' | 'job';
+export type PayUnit = 'hour' | 'day' | 'week' | 'month' | 'once';
+
+export interface Job {
+  id: string;
+  kind: JobKind; // piece = once-off work, job = ongoing position
+  title: string;
+  description: string;
+  pay: number | null;
+  payUnit: PayUnit | '';
+  town: string;
+  workWhen: string;
+  posterName: string;
+  phone: string;
+  closesOn: string; // yyyy-mm-dd or ''
+  isFilled: boolean;
+  isActive: boolean;
+  ownerId: string;
+  createdAt: number;
+}
+
 export type Role = 'customer' | 'staff' | 'admin';
 
 export interface Account {

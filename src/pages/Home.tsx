@@ -5,6 +5,7 @@ import { Empty, OfflineBanner } from '../components/ui';
 import { GROUPS, groupOf, type Group } from '../lib/constants';
 import { statusOf } from '../lib/hours';
 import type { Business, Status } from '../lib/types';
+import { jobIsOpen } from '../lib/data';
 
 export const townLabel = (town: string) => (town === 'all' ? 'All of Nkomazi' : town);
 export const inTown = (town: string) => (x: { town: string }) => town === 'all' || x.town === town;
@@ -22,6 +23,7 @@ export default function Home() {
   const n = countStatuses(list, now);
   const sellers = list.filter((b) => b.sellsOnline).length;
   const groups = data.groups.filter(inTown(town)).length;
+  const openJobs = data.jobs.filter((j) => jobIsOpen(j, now) && (town === 'all' || j.town === town)).length;
 
   const Tile = ({ g }: { g: Group }) => {
     const sub = list.filter((b) => groupOf(b.category) === g);
@@ -69,6 +71,10 @@ export default function Home() {
             <span className="live"><span className="dot" style={{ color: 'var(--accent)' }} />{groups} study group{groups === 1 ? '' : 's'}</span></Link>
         </div>
       </section>
+
+      <Link className="card" to="/market?tab=jobs"><span className="ic"><Icon name="briefcase" /></span>
+        <span className="body"><span className="name">Local jobs and piece work</span>
+          <span className="meta">{openJobs ? `${openJobs} open in ${townLabel(town)}` : `Nothing open in ${townLabel(town)} yet`} · post work you need done</span></span><Icon name="chev" /></Link>
 
       <Link className="card" to="/ask"><span className="ic"><Icon name="spark" /></span>
         <span className="body"><span className="name">Ask VillageLink</span><span className="meta">“Where can I get diesel now?” or “Explain photosynthesis for Grade 10.”</span></span><Icon name="chev" /></Link>

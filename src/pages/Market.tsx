@@ -6,10 +6,13 @@ import { LISTING_KINDS } from '../lib/constants';
 import { ago, hoursHint, minsSince, sortBusinesses, statusOf } from '../lib/hours';
 import { rand } from '../lib/format';
 import { actions } from '../lib/actions';
-import type { ListingKind } from '../lib/types';
+import type { Job, JobKind, ListingKind } from '../lib/types';
+import { JOB_KINDS, JOB_SAFETY } from '../lib/constants';
+import { jobIsOpen } from '../lib/data';
+import { JobBadge, closesText, payText } from '../sheets/JobSheets';
 import { inTown, townLabel } from './Home';
 
-type Tab = 'shops' | 'listings' | 'orders';
+type Tab = 'shops' | 'listings' | 'jobs' | 'orders';
 
 export default function Market() {
   const app = useApp();
@@ -17,6 +20,7 @@ export default function Market() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'shops';
   const kind = (params.get('kind') as ListingKind | 'all') || 'all';
+  const jobKind = (params.get('type') as JobKind | 'all') || 'all';
   const set = (p: Record<string, string>) => setParams({ tab, ...(kind !== 'all' ? { kind } : {}), ...p }, { replace: true });
 
   let body: JSX.Element;
@@ -40,6 +44,44 @@ export default function Market() {
       <Empty title={`No shops taking orders in ${townLabel(town)} yet`}>
         <span className="small muted">Shops can start selling here with a VillageLink business plan.</span>
       </Empty>
+    );
+  } else if (tab === 'jobs') {
+    const jobCard = (j: Job) => (
+      <button key={j.id} className="card" onClick={() => openSheet({ kind: 'job', id: j.id })}>
+        <span className="thumb"><Icon name="briefcase" /></span>
+        <span className="body">
+          <span className="between" style={{ alignItems: 'flex-start' }}><span className="name">{j.title}</span><JobBadge j={j} /></span>
+          <span className="price" style={{ fontSize: 15 }}>{payText(j)}</span>
+          <span className="meta">{[j.town, j.workWhen, closesText(j)].filter(Boolean).join(' · ')}</span>
+          <span className="meta">{user?.id === j.ownerId ? 'Your post' : `Posted by ${j.posterName}`} · {ago(minsSince(j.createdAt, now))}</span>
+        </span>
+      </button>
+    );
+    const open = data.jobs.filter((j) => jobIsOpen(j, now)).filter((j) => jobKind === 'all' || j.kind === jobKind);
+    const local = open.filter(inTown(town));
+    const elsewhere = town === 'all' ? [] : open.filter((j) => j.town !== town);
+    // Your posts that are no longer in the open list (filled, closed or hidden), so you can reopen or edit them.
+    const mine = user ? data.jobs.filter((j) => j.ownerId === user.id && !jobIsOpen(j, now)) : [];
+    body = (
+      <>
+        <div className="chips" role="group" aria-label="Kind of work">
+          {(['all', 'piece', 'job'] as (JobKind | 'all')[]).map((k) => (
+            <button key={k} className="chip" aria-pressed={jobKind === k}
+              onClick={() => setParams({ tab, ...(k === 'all' ? {} : { type: k }) }, { replace: true })}>{k === 'all' ? 'All work' : JOB_KINDS[k].short}</button>
+          ))}
+        </div>
+        <button className="btn btn-mint" onClick={() => { if (!needSignIn('job')) openSheet({ kind: 'editJob', id: null }); }}><Icon name="plus" />Post a job or piece work</button>
+        <section className="sec">
+          {local.length ? local.map(jobCard) : <Empty title={`No open work in ${townLabel(town)} right now`}><span className="small muted">Post work you need done, or check back soon.</span></Empty>}
+        </section>
+        {elsewhere.length > 0 && (
+          <section className="sec"><div className="sechead"><h3>Elsewhere in Nkomazi</h3><span>{elsewhere.length}</span></div>{elsewhere.slice(0, 20).map(jobCard)}</section>
+        )}
+        {mine.length > 0 && (
+          <section className="sec"><div className="sechead"><h3>Your filled and closed posts</h3><span>Tap to reopen or edit</span></div>{mine.map(jobCard)}</section>
+        )}
+        <p className="note">{JOB_SAFETY}</p>
+      </>
     );
   } else if (tab === 'listings') {
     const list = data.listings.filter((l) => l.isActive).filter(inTown(town)).filter((l) => kind === 'all' || l.kind === kind);
@@ -89,7 +131,7 @@ export default function Market() {
       <OfflineBanner />
       <h2>Marketplace</h2>
       <div className="seg" role="group" aria-label="Market section">
-        {([['shops', 'Shop local'], ['listings', 'Buy & sell'], ['orders', 'My orders']] as [Tab, string][]).map(([k, l]) => (
+        {([['shops', 'Shop local'], ['listings', 'Buy & sell'], ['jobs', 'Jobs'], ['orders', 'My orders']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} aria-pressed={tab === k} onClick={() => set({ tab: k })}>{l}</button>
         ))}
       </div>
